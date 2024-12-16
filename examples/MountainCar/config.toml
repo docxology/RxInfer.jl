@@ -1,0 +1,29 @@
+# Mountain Car Simulation Configuration
+
+[physics]
+engine_force_limit = 0.05    # Maximum force the engine can apply
+friction_coefficient = 0.12   # Coefficient of friction
+
+[initial_state]
+position = -0.5     # Starting position in the valley
+velocity = 0.0      # Starting velocity
+
+[target_state]
+position = 0.5      # Target position
+velocity = 0.0      # Target velocity
+
+[simulation]
+naive_timesteps = 1000        # Total simulation time for naive approach
+active_inference_timesteps = 1000  # Total simulation time for active inference
+planning_horizon = 50        # Planning horizon for active inference
+
+[model_parameters]
+state_transition_precision = 1e4  # Gamma parameter (precision of state transitions)
+observation_precision = 1e-4      # Theta parameter (precision of observations)
+belief_uncertainty_huge = 1e10    # Large uncertainty value for beliefs
+belief_uncertainty_tiny = 1e-10   # Small uncertainty value for beliefs
+
+[visualization]
+fps = 15                     # Frames per second for animations
+landscape_xlims = [-1.0, 1.0]  # X-axis limits for landscape plot
+landscape_ylims = [-0.05, 0.15] # Y-axis limits for landscape plot 

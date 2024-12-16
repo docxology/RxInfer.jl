@@ -1,11 +1,21 @@
-using HypergeometricFunctions: _₂F₁
 using RxInfer
 using RxInfer: getmodel, getreturnval, getvarref, getvariable
 using RxInfer.ReactiveMP: getrecent, messageout
+using HypergeometricFunctions
+using TOML
 
 # Constants for numerical stability
 const HUGE = 1e10
 const TINY = 1e-10
+
+# Load configuration if not already loaded
+if !@isdefined(config)
+    config = TOML.parsefile(joinpath(@__DIR__, "config.toml"))
+end
+
+# Update constants from config
+const HUGE = config["model_parameters"]["belief_uncertainty_huge"]
+const TINY = config["model_parameters"]["belief_uncertainty_tiny"]
 
 """
     create_physics(; engine_force_limit = 0.04, friction_coefficient = 0.1)
@@ -82,6 +92,13 @@ function create_world(; Fg, Ff, Fa, initial_position = -0.5, initial_velocity = 
     return (execute, observe)
 end
 
+"""
+    mountain_car(m_u, V_u, m_x, V_x, m_s_t_min, V_s_t_min, T, Fg, Fa, Ff, engine_force_limit)
+
+Internal model for the mountain car problem.
+"""
+function mountain_car end
+
 @model function mountain_car(m_u, V_u, m_x, V_x, m_s_t_min, V_s_t_min, T, Fg, Fa, Ff, engine_force_limit)
     # Transition function modeling transition due to gravity and friction
     g = (s_t_min::AbstractVector) -> begin
@@ -97,9 +114,9 @@ end
     # Inverse engine force
     h_inv = (delta_s_dot::AbstractVector) -> [atanh(clamp(delta_s_dot[2], -engine_force_limit+1e-3, engine_force_limit-1e-3)/engine_force_limit)]
     
-    # Internal model parameters
-    Gamma = 1e4*diageye(2)  # Precision of state transitions
-    Theta = 1e-4*diageye(2) # Precision of observations
+    # Internal model parameters from config
+    Gamma = config["model_parameters"]["state_transition_precision"]*diageye(2)  # Precision of state transitions
+    Theta = config["model_parameters"]["observation_precision"]*diageye(2) # Precision of observations
 
     s_t_min ~ MvNormal(mean = m_s_t_min, cov = V_s_t_min)
     s_k_min = s_t_min
