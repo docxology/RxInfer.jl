@@ -1,21 +1,44 @@
+module MountainCar_Methods
+
 using RxInfer
 using RxInfer: getmodel, getreturnval, getvarref, getvariable
 using RxInfer.ReactiveMP: getrecent, messageout
 using HypergeometricFunctions
 using TOML
+using LinearAlgebra
 
-# Constants for numerical stability
-const HUGE = 1e10
-const TINY = 1e-10
+export create_physics, create_world, create_agent, calculate_energy
 
-# Load configuration if not already loaded
-if !@isdefined(config)
-    config = TOML.parsefile(joinpath(@__DIR__, "config.toml"))
+# Constants for numerical stability (defaults)
+const DEFAULT_HUGE = 1e10
+const DEFAULT_TINY = 1e-10
+
+# Function to safely load configuration
+function load_config()
+    config_path = joinpath(@__DIR__, "config.toml")
+    if !isfile(config_path)
+        @warn "Configuration file not found, using defaults"
+        return Dict(
+            "model_parameters" => Dict(
+                "belief_uncertainty_huge" => DEFAULT_HUGE,
+                "belief_uncertainty_tiny" => DEFAULT_TINY,
+                "state_transition_precision" => 1e4,
+                "observation_precision" => 1e-4
+            )
+        )
+    end
+    return TOML.parsefile(config_path)
 end
 
+# Load configuration
+const config = load_config()
+
 # Update constants from config
-const HUGE = config["model_parameters"]["belief_uncertainty_huge"]
-const TINY = config["model_parameters"]["belief_uncertainty_tiny"]
+const HUGE = get(get(config, "model_parameters", Dict()), "belief_uncertainty_huge", DEFAULT_HUGE)
+const TINY = get(get(config, "model_parameters", Dict()), "belief_uncertainty_tiny", DEFAULT_TINY)
+
+# Helper function for diagonal identity matrix
+diageye(n::Int) = Matrix{Float64}(I, n, n)
 
 """
     create_physics(; engine_force_limit = 0.04, friction_coefficient = 0.1)
@@ -26,10 +49,6 @@ Returns tuple of (Fa, Ff, Fg, height) where:
 - Ff: Friction force function
 - Fg: Gravitational force function
 - height: Landscape height function
-
-References:
-- Friston, K. et al. (2017). Active Inference: A Process Theory
-- DOI: 10.1162/NECO_a_00912
 """
 function create_physics(; engine_force_limit = 0.04, friction_coefficient = 0.1)
     # Engine force as function of action 
@@ -155,7 +174,17 @@ Returns:
 - slide: Function to shift beliefs forward
 - future: Function to predict future states
 """
-function create_agent(;T = 20, Fg, Fa, Ff, engine_force_limit, x_target, initial_position, initial_velocity)
+function create_agent(;T = 20, Fg, Fa, Ff, engine_force_limit, x_target, 
+                     initial_position, initial_velocity)
+    # Validate inputs
+    if T < 1
+        throw(ArgumentError("Planning horizon T must be positive"))
+    end
+    
+    if !validate_state(initial_position, initial_velocity)
+        throw(ArgumentError("Invalid initial state"))
+    end
+    
     # Initialize beliefs
     Epsilon = fill(HUGE, 1, 1)
     m_u = Vector{Float64}[ [ 0.0] for k=1:T ]
@@ -229,4 +258,37 @@ function create_agent(;T = 20, Fg, Fa, Ff, engine_force_limit, x_target, initial
     return (compute, act, slide, future)
 end
 
-export create_physics, create_world, create_agent
+# Add parameter validation
+function validate_physics_params(engine_force_limit, friction_coefficient)
+    if engine_force_limit <= 0
+        throw(ArgumentError("engine_force_limit must be positive"))
+    end
+    if friction_coefficient <= 0
+        throw(ArgumentError("friction_coefficient must be positive"))
+    end
+    return true
+end
+
+# Add state validation
+function validate_state(position, velocity)
+    if !isfinite(position) || !isfinite(velocity)
+        return false
+    end
+    return true
+end
+
+"""
+    calculate_energy(positions, velocities, height_func)
+
+Calculate the kinetic, potential, and total energy for a trajectory.
+Returns tuple of (kinetic_energy, potential_energy, total_energy).
+"""
+function calculate_energy(positions, velocities, height_func)
+    # Mass is assumed to be 1 for simplicity
+    kinetic_energy = 0.5 .* velocities.^2
+    potential_energy = 9.81 .* map(height_func, positions)  # g ≈ 9.81 m/s²
+    total_energy = kinetic_energy .+ potential_energy
+    return kinetic_energy, potential_energy, total_energy
+end
+
+end # module
