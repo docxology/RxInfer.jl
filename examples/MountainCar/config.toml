@@ -20,23 +20,23 @@ planning_horizon = 30 # Planning horizon for Active Inference agent
 
 [initial_state]
 # Initial state configuration
-position = -0.5      # Starting position of the car
-velocity = 0.0       # Starting velocity of the car
+position = -0.5      # Starting position of the car (standard starting point)
+velocity = 0.0       # Starting velocity of the car (start from rest)
 
 [target_state]
 # Target state configuration
-position = 0.5       # Target position to reach
-velocity = 0.0       # Target velocity at goal
+position = 0.5       # Target position to reach (standard goal position)
+velocity = 0.0       # Target velocity at goal (stop at goal)
 
 [visualization]
 # Visualization settings
-plot_width = 100     # Width of plots in characters
-plot_height = 30     # Height of plots in characters
-plot_colormap = "viridis"  # Colormap for heatmaps
-plot_border = "ascii"      # Border style for plots
+plot_width = 100     # Width of plots in characters (increased for better readability)
+plot_height = 30     # Height of plots in characters (increased for better detail)
+plot_colormap = "viridis"  # Colormap for heatmaps (perceptually uniform colormap)
+plot_border = "ascii"      # Border style for plots (compatible with all terminals)
 
 [output]
 # Output settings
-save_trajectories = true   # Save individual trajectory data
-save_raw_data = true      # Save raw simulation results
-compress_results = false   # Compress output files
+save_trajectories = true   # Save individual trajectory data for detailed analysis
+save_raw_data = true      # Save raw simulation results for future reference
+compress_results = false   # Keep results uncompressed for easier inspection
