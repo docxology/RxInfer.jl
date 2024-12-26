@@ -71,32 +71,41 @@ end
 Create heatmap analysis of the state-action space.
 """
 function create_heatmap_analysis(positions, velocities, actions; bins=30)
+    # Ensure all arrays have the same length
+    n = min(length(positions), length(velocities), length(actions))
+    positions = positions[1:n]
+    velocities = velocities[1:n]
+    actions = actions[1:n]
+    
     # Create state-action heatmap with edges
-    pos_edges = range(minimum(positions), maximum(positions), length=bins)
-    vel_edges = range(minimum(velocities), maximum(velocities), length=bins)
+    pos_edges = range(minimum(positions), maximum(positions), length=bins+1)
+    vel_edges = range(minimum(velocities), maximum(velocities), length=bins+1)
     
-    state_action_map = zeros(bins-1, bins-1)
-    visit_count = zeros(Int, bins-1, bins-1)
+    state_action_map = zeros(bins, bins)
+    visit_count = zeros(Int, bins, bins)
     
-    for i in 1:length(positions)
+    for i in 1:n
         pos_bin = searchsortedfirst(pos_edges, positions[i]) - 1
         vel_bin = searchsortedfirst(vel_edges, velocities[i]) - 1
-        if 1 <= pos_bin < bins && 1 <= vel_bin < bins
-            state_action_map[pos_bin, vel_bin] += actions[i]
-            visit_count[pos_bin, vel_bin] += 1
-        end
+        
+        # Ensure bin indices are within bounds
+        pos_bin = clamp(pos_bin, 1, bins)
+        vel_bin = clamp(vel_bin, 1, bins)
+        
+        state_action_map[pos_bin, vel_bin] += actions[i]
+        visit_count[pos_bin, vel_bin] += 1
     end
     
     # Average actions in each bin
-    for i in 1:bins-1, j in 1:bins-1
+    for i in 1:bins, j in 1:bins
         if visit_count[i,j] > 0
             state_action_map[i,j] /= visit_count[i,j]
         end
     end
     
     # Create bin centers for plotting
-    pos_centers = [(pos_edges[i] + pos_edges[i+1])/2 for i in 1:bins-1]
-    vel_centers = [(vel_edges[i] + vel_edges[i+1])/2 for i in 1:bins-1]
+    pos_centers = [(pos_edges[i] + pos_edges[i+1])/2 for i in 1:bins]
+    vel_centers = [(vel_edges[i] + vel_edges[i+1])/2 for i in 1:bins]
     
     return pos_centers, vel_centers, state_action_map
 end
