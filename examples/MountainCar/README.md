@@ -1,176 +1,113 @@
-# Mountain Car Active Inference
+# Mountain Car Meta-Analysis
 
-This example demonstrates Active Inference in action using the classic mountain car problem. The car must escape a valley by building up momentum through oscillatory movements, as direct approach with limited engine power is impossible.
+This directory contains the implementation of a meta-analysis comparing the performance of Active Inference and Naive agents in the Mountain Car environment across different physics parameters.
 
 ## Overview
 
-The implementation is based on the Active Inference formalism, where the agent:
-- Maintains beliefs about its position and velocity (hidden states)
-- Has preferences about desired states (being at the target position)
-- Performs inference to estimate current states
-- Selects actions that minimize expected free energy
+The meta-analysis explores how different combinations of engine force and friction coefficients affect the performance of two types of agents:
+1. **Active Inference Agent**: Uses Bayesian inference to plan actions based on a generative model of the environment
+2. **Naive Agent**: Uses a simple heuristic strategy (push in direction of motion)
 
-## Implementation Status
+## Files
 
-### Core Components
-- ✅ Physics engine with configurable parameters
-- ✅ Active Inference agent implementation
-- ✅ Naive approach for comparison
-- ✅ Visualization system with ghosted predictions
-- ✅ Parameter space exploration and analysis
-- ✅ Multi-threaded performance analysis
-- ✅ Configuration management via TOML
+- `MetaAnalysis_MountainCar.jl`: Main script for running the meta-analysis
+- `meta_analysis_simulation.jl`: Module for running batches of simulations
+- `meta_analysis_utils.jl`: Utility functions for metrics calculation
+- `visualization_functions.jl`: Functions for generating visualizations and analyses
+- `MountainCar.jl`: Implementation of the Mountain Car environment and agents
+- `config.toml`: Configuration file for meta-analysis parameters
 
-### Key Features
-- Dynamic force application with configurable limits
-- Friction and gravity physics simulation
-- Belief state tracking and updating
-- Expected free energy minimization
-- Parallel parameter space exploration
-- Comprehensive statistical analysis
-- Rich visualization suite
+## Running the Analysis
 
-## Project Structure
-
-### Key Files
-
-- `MountainCar.jl`: Main simulation runner
-  - Implements both naive and Active Inference approaches
-  - Handles visualization and analysis
-  - Supports ghosted prediction visualization
-  - Normalizes actions for fair comparison
-
-- `MountainCar_Methods.jl`: Core Active Inference implementation
-  - Physics engine with configurable parameters
-  - State transition dynamics and generative model
-  - Belief updating using message passing
-  - Action selection through expected free energy minimization
-  - Agent creation and world simulation functions
-
-- `MultiThread_MetaAnalysis_MountainCar.jl`: Meta-analysis framework
-  - Parallel parameter space exploration
-  - Statistical analysis of performance metrics
-  - Success rate and completion time comparisons
-  - Visualization of results through heatmaps and plots
-  - Generation of detailed analysis reports
-
-- `visualization.jl`: Visualization utilities
-  - Mountain valley landscape plotting
-  - Car position and trajectory animation
-  - State and belief evolution plots
-  - Performance comparison visualizations
-  - Ghosted prediction visualization
-
-- `config.toml`: Configuration management
-  - Physics parameters (engine force, friction)
-  - Initial and target states
-  - Simulation settings
-  - Visualization parameters
-
-- `Setup.jl`: Environment setup
-  - Package dependency management
-  - Project environment initialization
-  - Required statistical packages
-  - Visualization dependencies
-
-### Output Files
-
-The simulation generates several output files in the `Outputs/` directory:
-- Environment visualization
-- Naive approach summary and animation
-- Active Inference summary and animation
-- Performance comparison visualizations
-- Statistical analysis reports
-- Parameter space exploration results
-- Best parameters configuration
-
-## Running the Example
-
-1. Ensure Julia 1.6+ is installed on your system
-
-2. Clone the RxInfer repository and navigate to this example:
-   ```bash
-   git clone https://github.com/biaslab/RxInfer.jl.git
-   cd RxInfer.jl/examples/MountainCar
+1. Ensure you have Julia installed and the required packages:
+   ```julia
+   using Pkg
+   Pkg.activate(".")
+   Pkg.instantiate()
    ```
 
-3. Initialize the environment:
-   ```bash
-   julia Setup.jl
+2. Run the meta-analysis:
+   ```julia
+   include("MetaAnalysis_MountainCar.jl")
    ```
 
-4. Run the main simulation:
-   ```bash
-   julia MountainCar.jl
-   ```
+3. Results will be saved in the `meta_analysis_results` directory with a timestamp.
 
-5. For parameter space exploration:
-   ```bash
-   # Single-threaded version
-   julia MetaAnalysis_MountainCar.jl
-   
-   # Multi-threaded version (recommended)
-   JULIA_NUM_THREADS=4 julia MultiThread_MetaAnalysis_MountainCar.jl
-   ```
+## Analysis Outputs
 
-## Current Performance
+The meta-analysis generates several types of analyses:
 
-### Comparison: Naive vs Active Inference
-- The Active Inference agent consistently outperforms the naive approach
-- Both approaches have equal force capabilities (±2.0 force units)
-- Active Inference shows more strategic oscillatory behavior
-- Ghosted predictions demonstrate forward planning capability
+1. **Success Rate Analysis**
+   - Heatmaps showing success rates for different parameter combinations
+   - Comparison between agent types
 
-### Parameter Space Exploration
-- Engine force range: 0.01 to 0.05
-- Friction coefficient range: 0.01 to 0.05
-- Comprehensive analysis of success rates and completion times
-- Statistical significance testing of performance differences
-- Visualization of parameter space through heatmaps
+2. **Performance Metrics**
+   - Success rate
+   - Average completion time
+   - Energy usage
+   - Control efficiency
+   - Stability
+   - Oscillations
 
-### Visualization Improvements
-- Enhanced trajectory visualization
-- Ghosted predictions display
-- State space exploration plots
-- Performance comparison animations
-- Statistical analysis plots
+3. **Energy Analysis**
+   - Total energy distribution
+   - Energy vs Success Rate
+   - Energy vs Completion Time
+   - Energy Efficiency
+
+4. **Control Analysis**
+   - Control effort distribution
+   - Stability metrics
+   - Oscillation patterns
+   - Control strategy comparison
+
+5. **Parameter Analysis**
+   - Effect of force on success rate
+   - Effect of friction on success rate
+   - Best parameter combinations
+
+6. **Trajectory Analysis**
+   - Position distributions
+   - Velocity patterns
+   - Success characteristics
 
 ## Configuration
 
 The `config.toml` file allows customization of:
-- Physics parameters
-  - Engine force limits
-  - Friction coefficients
-- Initial conditions
-  - Starting position
-  - Initial velocity
-- Target state
-  - Goal position
-  - Desired velocity
-- Simulation parameters
-  - Number of timesteps
-  - Planning horizon
+- Number of episodes per parameter combination
+- Maximum steps per episode
+- Initial and target states
+- Force and friction parameter ranges
 - Visualization settings
-  - Plot limits
-  - Animation parameters
 
-## Analysis Tools
+## Metrics
 
-The meta-analysis framework provides:
-- Parameter space exploration
-- Statistical significance testing
-- Performance metrics computation
-- Success rate analysis
-- Completion time statistics
-- Visualization generation
-- Detailed report generation
+The analysis calculates several metrics:
 
-## Future Improvements
+1. **Success Rate**: Percentage of episodes where the agent reaches the target
+2. **Completion Time**: Steps taken to reach the target
+3. **Energy Usage**: Total energy consumed during the episode
+4. **Control Effort**: Sum of absolute control actions
+5. **Stability**: Variance of position around target
+6. **Oscillations**: Number of direction changes
+7. **Efficiency**: Combined metric of success, time, and energy usage
 
-Potential areas for enhancement:
-- Extended parameter space exploration
-- Additional performance metrics
-- Real-time visualization options
-- Alternative control strategies
-- Enhanced prediction visualization
-- Performance optimization
+## Results Format
+
+Results are saved in text files with detailed analyses and plots:
+- Raw data in CSV format
+- Success rate matrices
+- Performance comparisons
+- Energy usage analysis
+- Control strategy analysis
+- Parameter sweep results
+- Trajectory characteristics
+- Summary report with key findings
+
+## Extending the Analysis
+
+To modify or extend the analysis:
+1. Adjust parameters in `config.toml`
+2. Add new metrics in `meta_analysis_utils.jl`
+3. Create new visualization functions in `visualization_functions.jl`
+4. Modify the main script to include additional analyses

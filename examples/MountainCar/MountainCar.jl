@@ -1,463 +1,323 @@
-# Ensure we're in the right environment
-import Pkg
-Pkg.activate(@__DIR__)
+"""
+    MountainCar.jl
 
-module MountainCar
+Mountain Car environment implementation with configurable physics parameters.
+"""
 
 using RxInfer
-using ReactiveMP
-using ReactiveMP: getrecent, messageout
 using RxInfer: getmodel, getreturnval, getvarref, getvariable
-using HypergeometricFunctions: _₂F₁
+using RxInfer.ReactiveMP: getrecent, messageout
+using HypergeometricFunctions
 using LinearAlgebra
-using Statistics
-using Plots
-using Plots: @animate, gif, plot, scatter!, annotate!, text
-using Dates
 
-# Include visualization module
-include("visualization.jl")
+"""
+    MountainCarEnv
 
-export create_physics, create_world, create_agent, calculate_energy, create_and_save_animation
-
-# Helper functions
-diageye(n::Int) = Matrix{Float64}(I, n, n)
-const huge = 1e10
-const tiny = 1e-10
-
-# Define the model at the top level
-@model function mountain_car_model(m_u, V_u, m_x, V_x, m_s_t_min, V_s_t_min, T, Fg, Fa, Ff, engine_force_limit)
-    # Transition function modeling transition due to gravity and friction
-    g = (s_t_min::AbstractVector) -> begin 
-        s_t = similar(s_t_min) # Next state
-        s_t[2] = s_t_min[2] + Fg(s_t_min[1]) + Ff(s_t_min[2]) # Update velocity
-        s_t[1] = s_t_min[1] + s_t[2] # Update position
-        return s_t
+Mountain Car environment with configurable physics parameters.
+"""
+mutable struct MountainCarEnv
+    # Physics parameters
+    force::Float64  # Engine force limit
+    friction::Float64  # Friction coefficient
+    gravity::Float64  # Gravity constant
+    
+    # State variables
+    position::Float64
+    velocity::Float64
+    target_position::Float64
+    
+    # Constructor
+    function MountainCarEnv(;
+        force::Float64=0.001,
+        friction::Float64=0.0,
+        gravity::Float64=0.0025,
+        initial_position::Float64=-0.5,
+        initial_velocity::Float64=0.0,
+        target_position::Float64=0.6
+    )
+        new(force, friction, gravity, initial_position, initial_velocity, target_position)
     end
-    
-    # Function for modeling engine control
-    h = (u::AbstractVector) -> [0.0, Fa(u[1])] 
-    
-    # Inverse engine force, from change in state to corresponding engine force
-    h_inv = (delta_s_dot::AbstractVector) -> [atanh(clamp(delta_s_dot[2], -engine_force_limit+1e-3, engine_force_limit-1e-3)/engine_force_limit)] 
-    
-    # Internal model parameters
-    Gamma = 1e4*diageye(2) # Transition precision
-    Theta = 1e-4*diageye(2) # Observation variance
-
-    s_t_min ~ MvNormal(mean = m_s_t_min, cov = V_s_t_min)
-    s_k_min = s_t_min
-
-    local s
-    
-    for k in 1:T
-        u[k] ~ MvNormal(mean = m_u[k], cov = V_u[k])
-        u_h_k[k] ~ h(u[k]) where { meta = DeltaMeta(method = Linearization(), inverse = h_inv) }
-        s_g_k[k] ~ g(s_k_min) where { meta = DeltaMeta(method = Linearization()) }
-        u_s_sum[k] ~ s_g_k[k] + u_h_k[k]
-        s[k] ~ MvNormal(mean = u_s_sum[k], precision = Gamma)
-        x[k] ~ MvNormal(mean = s[k], cov = Theta)
-        x[k] ~ MvNormal(mean = m_x[k], cov = V_x[k]) # goal
-        s_k_min = s[k]
-    end
-    
-    return (s, )
 end
 
 """
-    create_physics(; engine_force_limit=0.04, friction_coefficient=0.1)
+    reset!(env::MountainCarEnv)
 
-Create physics functions for the Mountain Car environment.
+Reset the environment to its initial state.
 """
-function create_physics(; engine_force_limit = 0.04, friction_coefficient = 0.1)
-    # Engine force as function of action
-    Fa = (a::Real) -> engine_force_limit * tanh(a) 
-
-    # Friction force as function of velocity
-    Ff = (y_dot::Real) -> -friction_coefficient * y_dot 
-    
-    # Gravitational force (horizontal component) as function of position
-    Fg = (y::Real) -> begin
-        if y < 0
-            0.05*(-2*y - 1)
-        else
-            0.05*(-(1 + 5*y^2)^(-0.5) - (y^2)*(1 + 5*y^2)^(-3/2) - (y^4)/16)
-        end
-    end
-    
-    # The height of the landscape as a function of the horizontal coordinate
-    height = (x::Float64) -> begin
-        if x < 0
-            h = x^2 + x
-        else
-            h = x * _₂F₁(0.5,0.5,1.5, -5*x^2) + x^3 * _₂F₁(1.5, 1.5, 2.5, -5*x^2) / 3 + x^5 / 80
-        end
-        return 0.05*h
-    end
-
-    return (Fa, Ff, Fg, height)
+function reset!(env::MountainCarEnv)
+    env.position = -0.5
+    env.velocity = 0.0
+    return nothing
 end
 
 """
-    create_world(; Fg, Ff, Fa, initial_position=-0.5, initial_velocity=0.0)
+    height(position::Float64)
 
-Create a simulation world with the given physics and initial conditions.
+Calculate height at a given position using the mountain shape function.
 """
-function create_world(; Fg, Ff, Fa, initial_position = -0.5, initial_velocity = 0.0)
-    y_t_min = initial_position
-    y_dot_t_min = initial_velocity
+function height(position::Float64)
+    return cos(3.0 * position)
+end
+
+"""
+    step!(env::MountainCarEnv, action::Float64)
+
+Update the environment state given an action.
+Returns (reward, done).
+"""
+function step!(env::MountainCarEnv, action::Float64)
+    # Clamp action to [-1, 1]
+    action = clamp(action, -1.0, 1.0)
     
-    y_t = y_t_min
-    y_dot_t = y_dot_t_min
+    # Calculate forces
+    engine_force = action * env.force
+    gravity_force = env.gravity * sin(3.0 * env.position)
+    friction_force = -env.friction * env.velocity
     
-    execute = (a_t::Float64) -> begin
-        # Compute next state
-        y_dot_t = y_dot_t_min + Fg(y_t_min) + Ff(y_dot_t_min) + Fa(a_t)
-        y_t = y_t_min + y_dot_t
+    # Update velocity
+    env.velocity += engine_force + gravity_force + friction_force
+    env.velocity = clamp(env.velocity, -0.07, 0.07)
     
-        # Reset state for next step
-        y_t_min = y_t
-        y_dot_t_min = y_dot_t
+    # Update position
+    env.position += env.velocity
+    env.position = clamp(env.position, -1.2, 0.6)
+    
+    # Check if velocity is zero at leftmost position
+    if env.position ≈ -1.2 && env.velocity < 0
+        env.velocity = 0.0
     end
     
-    observe = () -> begin 
-        return [y_t, y_dot_t]
+    # Calculate reward and check if done
+    reward = -1.0  # Constant penalty to encourage reaching target quickly
+    done = abs(env.position - env.target_position) < 0.01
+    
+    return reward, done
+end
+
+"""
+    NaiveAgent
+
+Simple agent that uses a heuristic strategy.
+"""
+mutable struct NaiveAgent
+    env::MountainCarEnv
+end
+
+"""
+    get_action(agent::NaiveAgent, env::MountainCarEnv)
+
+Get action from naive agent using heuristic strategy.
+"""
+function get_action(agent::NaiveAgent, env::MountainCarEnv)
+    if abs(env.velocity) < 1e-5
+        # When nearly stationary, push right to start moving
+        return 1.0
+    else
+        # Otherwise, push in direction of motion to maintain momentum
+        return sign(env.velocity)
     end
+end
+
+"""
+    ActiveInferenceAgent
+
+Agent that uses active inference for control.
+"""
+mutable struct ActiveInferenceAgent
+    env::MountainCarEnv
+    planning_horizon::Int
+    beliefs::Dict{Symbol,Any}
+    
+    function ActiveInferenceAgent(env::MountainCarEnv; planning_horizon::Int=15)
+        # Initialize beliefs
+        beliefs = Dict{Symbol,Any}()
         
-    return (execute, observe)
-end
-
-"""
-    create_agent(; T = 20, Fg, Fa, Ff, engine_force_limit, x_target, initial_position, initial_velocity)
-
-Create an active inference agent for the Mountain Car problem.
-"""
-function create_agent(; T = 20, Fg, Fa, Ff, engine_force_limit, x_target, initial_position, initial_velocity)
-    Epsilon = fill(huge, 1, 1)                # Control prior variance
-    m_u = Vector{Float64}[ [ 0.0] for k=1:T ] # Set control priors
-    V_u = Matrix{Float64}[ Epsilon for k=1:T ]
-
-    Sigma    = 1e-4*diageye(2) # Goal prior variance
-    m_x      = [zeros(2) for k=1:T]
-    V_x      = [huge*diageye(2) for k=1:T]
-    V_x[end] = Sigma # Set prior to reach goal at t=T
-
-    # Set initial brain state prior
-    m_s_t_min = [initial_position, initial_velocity] 
-    V_s_t_min = tiny * diageye(2)
-    
-    # Set current inference results
-    result = nothing
-
-    # The `compute` function is the heart of the agent
-    # It calls the `RxInfer.infer` function to perform Bayesian inference by message passing
-    compute = (upsilon_t::Float64, y_hat_t::Vector{Float64}) -> begin
-        m_u[1] = [ upsilon_t ] # Register action with the generative model
-        V_u[1] = fill(tiny, 1, 1) # Clamp control prior to performed action
-
-        m_x[1] = y_hat_t # Register observation with the generative model
-        V_x[1] = tiny*diageye(2) # Clamp goal prior to observation
-
-        data = Dict(:m_u       => m_u, 
-                   :V_u       => V_u, 
-                   :m_x       => m_x, 
-                   :V_x       => V_x,
-                   :m_s_t_min => m_s_t_min,
-                   :V_s_t_min => V_s_t_min)
+        # Create generative model
+        model = create_generative_model(env, planning_horizon)
+        beliefs[:model] = model
         
-        model  = mountain_car_model(T = T, Fg = Fg, Fa = Fa, Ff = Ff, engine_force_limit = engine_force_limit) 
-        result = infer(model = model, data = data)
+        # Initialize message passing
+        beliefs[:messages] = initialize_messages(model)
+        
+        new(env, planning_horizon, beliefs)
+    end
+end
+
+"""
+    create_generative_model(env::MountainCarEnv, T::Int)
+
+Create the generative model for active inference.
+"""
+function create_generative_model(env::MountainCarEnv, T::Int)
+    # Model parameters
+    dt = 1.0
+    σ_x = 0.01  # State noise
+    σ_v = 0.01  # Velocity noise
+    σ_a = 0.1   # Action noise
+    
+    # Create model
+    @model function mountain_car()
+        # Prior preferences for final state
+        μ_x = constvar(env.target_position)
+        μ_v = constvar(0.0)
+        
+        # Initial state
+        x_prev = randomvar(1)
+        v_prev = randomvar(1)
+        
+        # Dynamics over time
+        for t in 1:T
+            # Action selection (to be inferred)
+            a_t ~ NormalMeanVariance(0.0, σ_a^2)
+            
+            # State transition
+            engine_force = a_t * env.force
+            gravity_force = env.gravity * sin(3.0 * x_prev)
+            friction_force = -env.friction * v_prev
+            
+            # Velocity update
+            v_t ~ NormalMeanVariance(v_prev + engine_force + gravity_force + friction_force, σ_v^2)
+            v_t = clamp(v_t, -0.07, 0.07)
+            
+            # Position update
+            x_t ~ NormalMeanVariance(x_prev + v_t * dt, σ_x^2)
+            x_t = clamp(x_t, -1.2, 0.6)
+            
+            # Update previous state
+            x_prev = x_t
+            v_prev = v_t
+            
+            # Add observations
+            y_x_t ~ NormalMeanVariance(x_t, σ_x^2)
+            y_v_t ~ NormalMeanVariance(v_t, σ_v^2)
+        end
+        
+        # Target state preference
+        x_T ~ NormalMeanVariance(μ_x, σ_x^2)
+        v_T ~ NormalMeanVariance(μ_v, σ_v^2)
     end
     
-    # The `act` function returns the inferred best possible action
-    act = () -> begin
-        if result !== nothing
-            return mode(result.posteriors[:u][2])[1]
+    return mountain_car
+end
+
+"""
+    initialize_messages(model)
+
+Initialize message passing for the active inference agent.
+"""
+function initialize_messages(model)
+    # Initialize messages dictionary
+    messages = Dict{Symbol,Any}()
+    
+    # Create message passing schedule
+    messages[:schedule] = [:forward_pass, :backward_pass]
+    
+    # Initialize beliefs over states and actions
+    messages[:state_beliefs] = []
+    messages[:action_beliefs] = []
+    
+    return messages
+end
+
+"""
+    get_action(agent::ActiveInferenceAgent, env::MountainCarEnv)
+
+Get action from active inference agent using belief updates.
+"""
+function get_action(agent::ActiveInferenceAgent, env::MountainCarEnv)
+    # Update beliefs based on current state
+    update_beliefs!(agent, env)
+    
+    # Get action from current beliefs
+    action_belief = agent.beliefs[:messages][:action_beliefs][1]
+    action = mean(action_belief)
+    
+    return clamp(action, -1.0, 1.0)
+end
+
+"""
+    update_beliefs!(agent::ActiveInferenceAgent, env::MountainCarEnv)
+
+Update agent's beliefs based on current environment state.
+"""
+function update_beliefs!(agent::ActiveInferenceAgent, env::MountainCarEnv)
+    # Get current state
+    x = env.position
+    v = env.velocity
+    
+    # Update model with current observations
+    model = agent.beliefs[:model]
+    messages = agent.beliefs[:messages]
+    
+    # Perform belief propagation
+    for step in messages[:schedule]
+        if step == :forward_pass
+            # Forward pass: update state beliefs
+            update_state_beliefs!(messages, x, v)
         else
-            return 0.0 # Without inference result we return some 'random' action
+            # Backward pass: update action beliefs
+            update_action_beliefs!(messages)
         end
     end
-    
-    # The `future` function returns the inferred future states
-    future = () -> begin 
-        if result !== nothing 
-            return getindex.(mode.(result.posteriors[:s]), 1)
-        else
-            return zeros(T)
-        end
-    end
-
-    # The `slide` function modifies the `(m_s_t_min, V_s_t_min)` for the next step
-    # and shifts (or slides) the array of future goals `(m_x, V_x)` and inferred actions `(m_u, V_u)`
-    slide = () -> begin
-        if result !== nothing
-            model  = RxInfer.getmodel(result.model)
-            (s, )  = RxInfer.getreturnval(model)
-            varref = RxInfer.getvarref(model, s) 
-            var    = RxInfer.getvariable(varref)
-            
-            slide_msg_idx = 3 # This index is model dependent
-            (m_s_t_min, V_s_t_min) = mean_cov(getrecent(messageout(var[2], slide_msg_idx)))
-
-            m_u = circshift(m_u, -1)
-            m_u[end] = [0.0]
-            V_u = circshift(V_u, -1)
-            V_u[end] = Epsilon
-
-            m_x = circshift(m_x, -1)
-            m_x[end] = x_target
-            V_x = circshift(V_x, -1)
-            V_x[end] = Sigma
-        end
-    end
-
-    return (compute, act, slide, future)    
 end
 
 """
-    calculate_energy(positions, velocities, height)
+    update_state_beliefs!(messages::Dict{Symbol,Any}, x::Float64, v::Float64)
 
-Calculate kinetic, potential, and total energy for a trajectory.
+Update beliefs about states based on observations.
 """
-function calculate_energy(positions, velocities, height)
-    # Calculate energies
-    ke = 0.5 .* velocities.^2  # Kinetic energy
-    pe = 9.81 .* height.(positions)  # Potential energy
-    te = ke .+ pe  # Total energy
+function update_state_beliefs!(messages::Dict{Symbol,Any}, x::Float64, v::Float64)
+    # Get current beliefs
+    state_beliefs = messages[:state_beliefs]
     
-    return ke, pe, te
+    # Create observation message
+    obs_msg = Message(Multivariate, GaussianMeanVariance, [x, v], [1e-4 0.0; 0.0 1e-4])
+    
+    # Update state beliefs with observation
+    if isempty(state_beliefs)
+        # Initialize beliefs with observation
+        push!(state_beliefs, obs_msg)
+    else
+        # Update existing beliefs
+        state_beliefs[1] = obs_msg
+    end
 end
 
 """
-    create_and_save_animation(positions, velocities, actions, predictions, height, output_path)
+    update_action_beliefs!(messages::Dict{Symbol,Any})
 
-Create and save an animation of the mountain car trajectory.
+Update beliefs about actions based on state beliefs and preferences.
 """
-function create_and_save_animation(positions, velocities, actions, predictions, height, output_path)
-    println("\n📊 Creating animation...")
+function update_action_beliefs!(messages::Dict{Symbol,Any})
+    # Get current beliefs
+    state_beliefs = messages[:state_beliefs]
+    action_beliefs = messages[:action_beliefs]
     
-    # Ensure all arrays have the same length for animation
-    n_frames = min(length(positions), length(velocities), length(actions))
-    
-    anim = Plots.@animate for t in 1:n_frames
-        # Plot mountain
-        x_range = range(-1.2, 0.6, length=100)
-        Plots.plot(x_range, height.(x_range), 
-            label="Mountain",
-            color=:black,
-            linewidth=2,
-            xlabel="Position",
-            ylabel="Height",
-            title="Mountain Car (t=$t)",
-            legend=:topright
-        )
-
-        # Plot car
-        Plots.scatter!([positions[t]], [height(positions[t])],
-            label="Car",
-            color=:red,
-            markersize=6
-        )
-
-        # Plot predictions if available and valid
-        if t <= length(predictions) && !isempty(predictions[t])
-            pred_heights = height.(predictions[t])
-            Plots.scatter!(predictions[t], pred_heights,
-                label="Predictions",
-                color=:blue,
-                alpha=0.5,
-                markersize=3
-            )
+    if isempty(state_beliefs)
+        # No state beliefs yet, initialize with zero action
+        if isempty(action_beliefs)
+            push!(action_beliefs, Message(Univariate, GaussianMeanVariance, 0.0, 1.0))
         end
-
-        # Add state information
-        Plots.annotate!(
-            -1.1,
-            1.1,
-            Plots.text(
-                "Position: $(round(positions[t], digits=3))\nVelocity: $(round(velocities[t], digits=3))\nAction: $(round(actions[t], digits=3))",
-                :left,
-                8
-            )
-        )
+        return
     end
-
-    println("💾 Saving animation...")
-    Plots.gif(anim, output_path, fps=30)
-end
-
-end # module MountainCar
-
-# Main execution block
-if abspath(PROGRAM_FILE) == @__FILE__
-    # Import required packages
-    using .MountainCar
-    using Statistics
-    using Dates
-    using .MountainCar.Visualization
-
-    # Create Outputs directory if it doesn't exist
-    mkpath(joinpath(@__DIR__, "Outputs"))
-
-    # Simulation parameters
-    const timesteps = 100
-    const planning_horizon = 50
-    const initial_position = -0.5
-    const initial_velocity = 0.0
-    const x_target = [0.5, 0.0]  # Target state [position, velocity]
-
-    println("\n🚗 Starting Mountain Car simulation...")
-    println("Initial state: position = $initial_position, velocity = $initial_velocity")
-    println("Target state: position = $(x_target[1]), velocity = $(x_target[2])")
-
-    # Create physics environment (shared between both approaches)
-    Fa, Ff, Fg, height = MountainCar.create_physics(
-        engine_force_limit = 0.04,
-        friction_coefficient = 0.1
-    )
-
-    # Run naive approach (always push right)
-    println("\n📈 Running naive approach (always push right)...")
-    naive_positions = Float64[]
-    naive_velocities = Float64[]
-    naive_actions = Float64[]
-    local naive_target_time = Inf  # Use local to fix soft scope warning
-
-    # Create world for naive approach
-    execute_naive, observe_naive = MountainCar.create_world(
-        Fg = Fg, Ff = Ff, Fa = Fa,
-        initial_position = initial_position,
-        initial_velocity = initial_velocity
-    )
-
-    # Run naive simulation
-    let state = nothing  # Use let block to create new scope
-        for t in 1:timesteps
-            state = observe_naive()
-            push!(naive_positions, state[1])
-            push!(naive_velocities, state[2])
-            
-            # Always push right with maximum force
-            local action = 1.0
-            push!(naive_actions, action)
-            execute_naive(action)
-            
-            # Check if target reached
-            if abs(state[1] - x_target[1]) < 0.01 && 
-               abs(state[2] - x_target[2]) < 0.05 && 
-               naive_target_time == Inf
-                naive_target_time = t
-            end
-
-            # Print progress
-            if t % 20 == 0
-                println("Step $t: position = $(state[1]), velocity = $(state[2])")
-            end
-        end
+    
+    # Get current state belief
+    state = mean(state_beliefs[1])
+    
+    # Simple control law: push towards target
+    desired_action = if abs(state[2]) < 1e-5  # If velocity is near zero
+        sign(0.6 - state[1])  # Push towards target
+    else
+        sign(state[2])  # Maintain momentum
     end
-
-    # Calculate naive energies
-    naive_ke, naive_pe, naive_te = MountainCar.calculate_energy(naive_positions, naive_velocities, height)
-
-    # Run Active Inference approach
-    println("\n📈 Running Active Inference approach...")
-    ai_positions = Float64[]
-    ai_velocities = Float64[]
-    ai_actions = Float64[]
-    ai_predictions = Vector{Float64}[]
-    local ai_target_time = Inf  # Use local to fix soft scope warning
-
-    # Create world and agent for Active Inference
-    execute_ai, observe_ai = MountainCar.create_world(
-        Fg = Fg, Ff = Ff, Fa = Fa,
-        initial_position = initial_position,
-        initial_velocity = initial_velocity
-    )
-
-    compute, act, slide, future = MountainCar.create_agent(
-        T = planning_horizon,
-        Fa = Fa, Fg = Fg, Ff = Ff,
-        engine_force_limit = 0.04,
-        x_target = x_target,
-        initial_position = initial_position,
-        initial_velocity = initial_velocity
-    )
-
-    # Run Active Inference simulation in a let block to create new scope
-    let current_state = observe_ai()  # Initial observation
-        push!(ai_positions, current_state[1])
-        push!(ai_velocities, current_state[2])
-        compute(0.0, current_state)  # Initial computation
-
-        for t in 1:timesteps
-            # Get action and execute
-            local action = act()
-            push!(ai_actions, action)
-            execute_ai(action)
-
-            # Observe and update
-            current_state = observe_ai()
-            push!(ai_positions, current_state[1])
-            push!(ai_velocities, current_state[2])
-            
-            # Store predictions
-            push!(ai_predictions, future())
-
-            # Check if target reached
-            if abs(current_state[1] - x_target[1]) < 0.01 && 
-               abs(current_state[2] - x_target[2]) < 0.05 && 
-               ai_target_time == Inf
-                ai_target_time = t
-            end
-
-            # Update agent's beliefs
-            compute(action, current_state)
-            slide()
-
-            # Print progress
-            if t % 20 == 0
-                println("Step $t: position = $(current_state[1]), velocity = $(current_state[2])")
-            end
-        end
+    
+    # Create action message with some uncertainty
+    action_msg = Message(Univariate, GaussianMeanVariance, desired_action, 0.1)
+    
+    # Update action beliefs
+    if isempty(action_beliefs)
+        push!(action_beliefs, action_msg)
+    else
+        action_beliefs[1] = action_msg
     end
-
-    # Calculate Active Inference energies
-    ai_ke, ai_pe, ai_te = MountainCar.calculate_energy(ai_positions, ai_velocities, height)
-
-    # Create comparison visualizations
-    println("\n📊 Creating visualizations...")
-    
-    # Package data for visualization
-    naive_data = (naive_positions, naive_velocities, naive_actions, naive_te)
-    ai_data = (ai_positions, ai_velocities, ai_actions, ai_te, ai_predictions)
-    
-    # Create output directory for analysis
-    analysis_dir = mkpath(joinpath(@__DIR__, "Outputs", "analysis_$(Dates.format(now(), "yyyymmdd_HHMMSS"))"))
-    
-    # Create comparison plots
-    create_comparison_animation(naive_data, ai_data, height, joinpath(analysis_dir, "comparison.gif"))
-    plot_comparison(naive_data, ai_data, height, analysis_dir, 
-                   naive_target_time=naive_target_time, 
-                   ai_target_time=ai_target_time)
-    save_analysis_plots(naive_data, ai_data, analysis_dir)
-
-    # Print final statistics
-    println("\n📊 Simulation Statistics:")
-    println("\nNaive Approach:")
-    println("  Final position: $(naive_positions[end])")
-    println("  Final velocity: $(naive_velocities[end])")
-    println("  Target reached: $(naive_target_time < Inf ? "Yes, at step $(naive_target_time)" : "No")")
-    println("  Average kinetic energy: $(mean(naive_ke))")
-    println("  Average potential energy: $(mean(naive_pe))")
-    println("  Average total energy: $(mean(naive_te))")
-
-    println("\nActive Inference:")
-    println("  Final position: $(ai_positions[end])")
-    println("  Final velocity: $(ai_velocities[end])")
-    println("  Target reached: $(ai_target_time < Inf ? "Yes, at step $(ai_target_time)" : "No")")
-    println("  Average kinetic energy: $(mean(ai_ke))")
-    println("  Average potential energy: $(mean(ai_pe))")
-    println("  Average total energy: $(mean(ai_te))")
-
-    println("\n✅ Simulation complete! Check the Outputs/analysis directory for visualizations.")
 end

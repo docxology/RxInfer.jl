@@ -1,183 +1,178 @@
-module MetaAnalysisUtils
+"""
+    meta_analysis_utils.jl
+
+Utility functions for meta-analysis of the Mountain Car environment.
+"""
 
 using Statistics
-using LinearAlgebra
-using RxInfer
-using RxInfer: getmodel, getreturnval, getvarref, getvariable
-using RxInfer.ReactiveMP: getrecent, messageout
-using HypergeometricFunctions
+using DataFrames
 
-# Import MountainCar module
-using ..MountainCar
-
-export SimulationMetrics, run_simulation, calculate_metrics
+export calculate_oscillations, calculate_control_effort, calculate_stability, 
+       calculate_efficiency, analyze_results, generate_summary_report
 
 """
-    SimulationMetrics
-
-Structure to hold metrics from a single simulation run.
-"""
-struct SimulationMetrics
-    max_position::Float64
-    avg_velocity::Float64
-    success::Bool
-    target_time::Float64
-    total_energy::Float64
-    oscillations::Float64
-    control_effort::Float64
-    stability::Float64
-    efficiency::Float64
-    trajectory::Dict{String,Vector{Float64}}
-end
-
-"""
-    calculate_oscillations(positions)
+    calculate_oscillations(positions::Vector{Float64})
 
 Calculate the number of oscillations in a position trajectory.
 """
-function calculate_oscillations(positions)
+function calculate_oscillations(positions::Vector{Float64})
+    if length(positions) < 3
+        return 0
+    end
+    
     # Count direction changes
-    direction_changes = 0
+    oscillations = 0
     prev_direction = sign(positions[2] - positions[1])
     
-    for i in 2:(length(positions)-1)
-        curr_direction = sign(positions[i+1] - positions[i])
-        if curr_direction != prev_direction && curr_direction != 0
-            direction_changes += 1
-            prev_direction = curr_direction
+    for i in 3:length(positions)
+        direction = sign(positions[i] - positions[i-1])
+        if direction != prev_direction && direction != 0
+            oscillations += 1
+            prev_direction = direction
         end
     end
     
-    return direction_changes / 2  # Each full oscillation is two direction changes
+    return oscillations
 end
 
 """
-    calculate_control_effort(actions)
+    calculate_control_effort(actions::Vector{Float64})
 
 Calculate the total control effort from a sequence of actions.
 """
-function calculate_control_effort(actions)
+function calculate_control_effort(actions::Vector{Float64})
     return sum(abs.(actions))
 end
 
 """
-    calculate_stability(positions, velocities)
+    calculate_stability(positions::Vector{Float64}, target_position::Float64)
 
-Calculate trajectory stability based on position and velocity variance.
+Calculate the stability metric based on position variance around target.
 """
-function calculate_stability(positions, velocities)
-    pos_var = var(positions)
-    vel_var = var(velocities)
-    return 1.0 / (1.0 + sqrt(pos_var + vel_var))
-end
-
-"""
-    calculate_efficiency(success, target_time, total_energy)
-
-Calculate overall efficiency based on success, time to target, and energy use.
-"""
-function calculate_efficiency(success, target_time, total_energy)
-    if !success
+function calculate_stability(positions::Vector{Float64}, target_position::Float64)
+    if isempty(positions)
         return 0.0
     end
-    return 1.0 / (target_time * total_energy)
+    
+    # Calculate variance of positions relative to target
+    deviations = positions .- target_position
+    variance = var(deviations)
+    
+    # Convert to stability metric (higher is more stable)
+    return 1.0 / (1.0 + variance)
 end
 
 """
-    run_simulation(force, friction, config)
+    calculate_efficiency(success::Bool, target_time::Float64, total_energy::Float64)
 
-Run a single simulation with given parameters and return metrics.
+Calculate the efficiency metric combining success, time, and energy usage.
 """
-function run_simulation(force, friction, config)
-    # Extract simulation parameters from config
-    timesteps = config["simulation"]["timesteps"]
-    planning_horizon = config["simulation"]["planning_horizon"]
-    initial_position = config["initial_state"]["position"]
-    initial_velocity = config["initial_state"]["velocity"]
-    target_position = config["target_state"]["position"]
-    target_velocity = config["target_state"]["velocity"]
-    
-    # Create physics environment
-    Fa, Ff, Fg, height = MountainCar.create_physics(
-        engine_force_limit=force,
-        friction_coefficient=friction
-    )
-    
-    # Create world and agent
-    (execute, observe) = MountainCar.create_world(
-        Fg=Fg, Ff=Ff, Fa=Fa,
-        initial_position=initial_position,
-        initial_velocity=initial_velocity
-    )
-    
-    x_target = [target_position, target_velocity]
-    (compute, act, slide, future) = MountainCar.create_agent(
-        T=planning_horizon,
-        Fa=Fa, Fg=Fg, Ff=Ff,
-        engine_force_limit=force,
-        x_target=x_target,
-        initial_position=initial_position,
-        initial_velocity=initial_velocity
-    )
-    
-    # Run simulation
-    positions = Float64[]
-    velocities = Float64[]
-    actions = Float64[]
-    predictions = Vector{Float64}[]
-    target_time = Inf
-    
-    for t = 1:timesteps
-        state = observe()
-        push!(positions, state[1])
-        push!(velocities, state[2])
-        
-        compute(0.0, state)
-        action = clamp(act(), -1.0, 1.0)
-        push!(actions, action)
-        execute(action)
-        slide()
-        
-        push!(predictions, future())
-        
-        # Check if target reached
-        if abs(state[1] - target_position) < 0.01 && 
-           abs(state[2] - target_velocity) < 0.05 && 
-           target_time == Inf
-            target_time = t
-        end
+function calculate_efficiency(success::Bool, target_time::Float64, total_energy::Float64)
+    if !success || isinf(target_time) || isinf(total_energy)
+        return 0.0
     end
     
-    # Calculate metrics
-    ke, pe, te = MountainCar.calculate_energy(positions, velocities, height)
-    success = !isinf(target_time)
-    oscillations = calculate_oscillations(positions)
-    control_effort = calculate_control_effort(actions)
-    stability = calculate_stability(positions, velocities)
-    efficiency = calculate_efficiency(success, target_time, mean(te))
+    # Normalize time and energy to [0,1] range using reasonable maximum values
+    max_time = 1000.0  # maximum reasonable time steps
+    max_energy = 1000.0  # maximum reasonable energy usage
     
-    # Create trajectory dictionary
-    trajectory = Dict{String,Vector{Float64}}(
-        "positions" => positions,
-        "velocities" => velocities,
-        "actions" => actions,
-        "kinetic_energy" => ke,
-        "potential_energy" => pe,
-        "total_energy" => te
-    )
+    norm_time = min(target_time / max_time, 1.0)
+    norm_energy = min(total_energy / max_energy, 1.0)
     
-    return SimulationMetrics(
-        maximum(positions),
-        mean(velocities),
-        success,
-        target_time,
-        mean(te),
-        oscillations,
-        control_effort,
-        stability,
-        efficiency,
-        trajectory
-    )
+    # Combine metrics with weights
+    time_weight = 0.4
+    energy_weight = 0.6
+    
+    return 1.0 - (time_weight * norm_time + energy_weight * norm_energy)
 end
 
-end # module 
+"""
+    analyze_results(results::DataFrame)
+
+Analyze the results of the meta-analysis and return summary statistics.
+"""
+function analyze_results(results::DataFrame)
+    # Group results by agent type
+    grouped = groupby(results, :agent_type)
+    
+    # Calculate summary statistics for each agent type
+    summary_stats = Dict()
+    
+    for group in grouped
+        agent = group.agent_type[1]
+        summary_stats[agent] = Dict(
+            "success_rate" => mean(group.success),
+            "avg_target_time" => mean(group[group.success, :target_time]),
+            "avg_energy" => mean(group.total_energy),
+            "avg_efficiency" => mean(group.efficiency),
+            "avg_stability" => mean(group.stability),
+            "avg_oscillations" => mean(group.oscillations),
+            "avg_control_effort" => mean(group.control_effort),
+            "max_position_reached" => maximum(group.max_position),
+            "avg_velocity" => mean(group.avg_velocity)
+        )
+    end
+    
+    return summary_stats
+end
+
+"""
+    generate_summary_report(results::DataFrame, output_dir::String)
+
+Generate a detailed summary report of the meta-analysis results.
+"""
+function generate_summary_report(results::DataFrame, output_dir::String)
+    # Analyze results
+    summary_stats = analyze_results(results)
+    
+    # Create report string
+    report = """
+    # Mountain Car Meta-Analysis Summary Report
+    
+    ## Overview
+    - Total simulations: $(nrow(results))
+    - Parameter combinations tested: $(length(unique(zip(results.force, results.friction))))
+    - Timestamp: $(Dates.now())
+    
+    ## Performance Comparison
+    
+    ### Success Rates
+    """
+    
+    for (agent, stats) in summary_stats
+        report *= """
+        
+        ### $agent Agent Performance
+        - Success Rate: $(round(stats["success_rate"] * 100, digits=2))%
+        - Average Time to Target: $(round(stats["avg_target_time"], digits=2)) steps
+        - Average Energy Usage: $(round(stats["avg_energy"], digits=2))
+        - Average Efficiency: $(round(stats["avg_efficiency"], digits=2))
+        - Average Stability: $(round(stats["avg_stability"], digits=2))
+        - Average Oscillations: $(round(stats["avg_oscillations"], digits=2))
+        - Average Control Effort: $(round(stats["avg_control_effort"], digits=2))
+        - Maximum Position Reached: $(round(stats["max_position_reached"], digits=2))
+        - Average Velocity: $(round(stats["avg_velocity"], digits=2))
+        """
+    end
+    
+    # Add parameter analysis
+    report *= """
+    
+    ## Parameter Analysis
+    
+    ### Effect of Engine Force
+    - Minimum force tested: $(minimum(results.force))
+    - Maximum force tested: $(maximum(results.force))
+    - Optimal force range: $(mean(results[results.success, :force]) ± std(results[results.success, :force]))
+    
+    ### Effect of Friction
+    - Minimum friction tested: $(minimum(results.friction))
+    - Maximum friction tested: $(maximum(results.friction))
+    - Optimal friction range: $(mean(results[results.success, :friction]) ± std(results[results.success, :friction]))
+    """
+    
+    # Write report to file
+    open(joinpath(output_dir, "summary_report.md"), "w") do io
+        write(io, report)
+    end
+end 

@@ -31,138 +31,168 @@ function safe_add_package(pkg_name, version=nothing)
     end
 end
 
-# Create and activate project environment
-println("\n📦 Creating project environment...")
-try
-    Pkg.activate(CURRENT_DIR)
-    println("✅ Activated project at $(Pkg.project().path)")
-catch e
-    println("❌ Failed to activate project:")
-    println("   $e")
-    exit(1)
-end
-
-# Required packages with specific versions
-println("\n📦 Installing required packages...")
-required_packages = [
-    ("Plots", "1.38"),
-    ("DataFrames", "1.7"),
-    ("CSV", "0.10"),
-    ("Distributions", "0.25"),
-    ("LinearAlgebra", nothing),
-    ("Statistics", nothing),
-    ("Random", nothing),
-    ("Logging", nothing),
-    ("LoggingExtras", "1"),
-    ("TOML", "1"),
-    ("ProgressMeter", "1"),
-    ("Dates", nothing),
-    ("Printf", nothing),
-    ("HypergeometricFunctions", "0.3"),
-    ("SharedArrays", nothing),
-    ("Distributed", nothing),
-    ("Measures", "0.3"),
-    ("Colors", "0.12"),
-    ("RecipesBase", "1"),
-    ("Parameters", "0.12"),
-    ("StatsBase", "0.34")
-]
-
-# Install packages
-failed_packages = String[]
-for (pkg, version) in required_packages
-    if !safe_add_package(pkg, version)
-        push!(failed_packages, pkg)
+# Function to verify package can be loaded
+function verify_package(pkg_name)
+    try
+        @eval using $(Symbol(pkg_name))
+        println("✅ Successfully loaded $pkg_name")
+        return true
+    catch e
+        println("❌ Failed to load $pkg_name:")
+        println("   $e")
+        return false
     end
 end
 
-# Add ReactiveMP and RxInfer in the correct order
-println("\n📥 Installing ReactiveMP and RxInfer packages...")
-try
-    # First install ReactiveMP with specific version
-    Pkg.add(PackageSpec(name="ReactiveMP", version="4.4.5"))
-    println("✅ Successfully installed ReactiveMP")
-    
-    # First activate and build RxInfer
-    Pkg.activate(RXINFER_PATH)
-    Pkg.instantiate()
-    Pkg.build()
-    println("✅ Built RxInfer in root project")
-    
+function main()
+    # Create and activate project environment
+    println("\n📦 Creating project environment...")
+    try
+        Pkg.activate(CURRENT_DIR)
+        println("✅ Activated project at $(Pkg.project().path)")
+    catch e
+        println("❌ Failed to activate project:")
+        println("   $e")
+        return false
+    end
+
+    # First, install and build RxInfer
+    println("\n📦 Setting up RxInfer...")
+
+    # First activate and build RxInfer in its own environment
+    println("🔨 Building RxInfer in its own environment...")
+    try
+        Pkg.activate(RXINFER_PATH)
+        Pkg.instantiate()
+        Pkg.build()
+        println("✅ Built RxInfer in its own environment")
+    catch e
+        println("❌ Failed to build RxInfer in its environment:")
+        println("   $e")
+        return false
+    end
+
     # Switch back to MountainCar environment
     Pkg.activate(CURRENT_DIR)
-    
+
     # Remove any existing RxInfer
     if "RxInfer" in keys(Pkg.project().dependencies)
+        println("🗑️  Removing existing RxInfer...")
         Pkg.rm("RxInfer")
     end
-    
-    # Develop RxInfer from local path
-    Pkg.develop(PackageSpec(path=RXINFER_PATH))
-    println("✅ Successfully added local RxInfer package")
-catch e
-    println("❌ Failed to install packages:")
-    println("   $e")
-    exit(1)
-end
 
-# Resolve and instantiate dependencies
-println("\n🔄 Resolving dependencies...")
-try
-    Pkg.resolve()
-    Pkg.instantiate()
-    
-    # Verify packages are installed
-    @eval using ReactiveMP
-    @eval using RxInfer
-    println("✅ Dependencies resolved successfully")
-catch e
-    println("❌ Failed to resolve dependencies:")
-    println("   $e")
-    exit(1)
-end
-
-# Create necessary directories
-println("\n📁 Creating necessary directories...")
-try
-    # Main output directory
-    mkpath(joinpath(CURRENT_DIR, "Outputs"))
-    println("✅ Created Outputs directory")
-    
-    # Meta-analysis output directory
-    mkpath(joinpath(CURRENT_DIR, "MetaAnalysis_Outputs"))
-    println("✅ Created MetaAnalysis_Outputs directory")
-catch e
-    println("❌ Failed to create directories:")
-    println("   $e")
-end
-
-# Print setup summary
-println("\n📋 Setup Summary:")
-if isempty(failed_packages)
-    println("✅ All packages installed successfully")
-else
-    println("⚠️  Failed to install packages:")
-    for pkg in failed_packages
-        println("   - $pkg")
+    # Add RxInfer from local path
+    println("📥 Adding RxInfer from local path...")
+    try
+        Pkg.develop(PackageSpec(path=RXINFER_PATH))
+        println("✅ Successfully added RxInfer from local path")
+    catch e
+        println("❌ Failed to add RxInfer:")
+        println("   $e")
+        return false
     end
+
+    # Required packages with specific versions
+    println("\n📦 Installing required packages...")
+    required_packages = [
+        ("Plots", "1.40"),
+        ("DataFrames", "1.7"),
+        ("CSV", "0.10"),
+        ("UnicodePlots", "3.6"),
+        ("ProgressMeter", "1.10"),
+        ("TOML", "1.0"),
+        ("HypergeometricFunctions", "0.3"),
+        ("LinearAlgebra", nothing),  # Part of stdlib
+        ("Statistics", nothing),     # Part of stdlib
+        ("Printf", nothing),         # Part of stdlib
+        ("Dates", nothing)          # Part of stdlib
+    ]
+
+    installation_success = true
+    for (pkg, version) in required_packages
+        if !safe_add_package(pkg, version)
+            installation_success = false
+        end
+    end
+
+    if !installation_success
+        println("\n❌ Some packages failed to install.")
+        return false
+    end
+
+    # Create necessary directories
+    println("\n📁 Creating necessary directories...")
+    dir_creation_success = true
+    for dir in ["results", "logs", "Outputs"]
+        dir_path = joinpath(CURRENT_DIR, dir)
+        try
+            mkpath(dir_path)
+            println("✅ Created directory: $dir")
+        catch e
+            println("❌ Failed to create directory $dir:")
+            println("   $e")
+            dir_creation_success = false
+        end
+    end
+
+    if !dir_creation_success
+        println("\n❌ Failed to create some directories.")
+        return false
+    end
+
+    # Verify installations
+    println("\n🔍 Verifying package installations...")
+    verification_success = true
+
+    # First verify RxInfer
+    println("\n📋 Verifying RxInfer installation...")
+    try
+        @eval using RxInfer
+        # Try to create a simple model to verify functionality
+        @eval begin
+            @model function test_model()
+                x ~ Normal(0.0, 1.0)
+                y ~ Normal(x, 1.0)
+                return y
+            end
+        end
+        println("✅ Successfully verified RxInfer functionality")
+    catch e
+        println("❌ Failed to verify RxInfer:")
+        println("   $e")
+        verification_success = false
+    end
+
+    # Verify other key packages
+    key_packages = ["Plots", "DataFrames", "CSV", "UnicodePlots", "ProgressMeter", "TOML"]
+    for pkg in key_packages
+        if !verify_package(pkg)
+            verification_success = false
+        end
+    end
+
+    if !verification_success
+        println("\n❌ Some package verifications failed.")
+        return false
+    end
+
+    # Print environment information
+    println("\n💻 Environment Information:")
+    println("Julia Version: $(VERSION)")
+    println("Project Path: $(Pkg.project().path)")
+    println("RxInfer Path: $RXINFER_PATH")
+
+    # Final status
+    println("\n✅ Setup completed successfully!")
+    println("You can now run the MountainCar analyses with:")
+    println("   julia --project=. MetaAnalysis_MountainCar.jl")
+    println("   julia --project=. MountainCar_Standalone.jl")
+
+    
+    return true
 end
 
-# Print usage instructions
-println("\n🎮 Usage Instructions:")
-println("1. For single simulation:")
-println("   julia --project=. MountainCar.jl")
-println("\n2. For parameter sweep (choose one):")
-println("   Multi-threaded (recommended):")
-println("      JULIA_NUM_THREADS=4 julia --project=. MetaAnalysis_MountainCar.jl")
-
-# Print environment info
-println("\n💻 Environment Information:")
-println("Julia Version: $(VERSION)")
-println("Number of Threads: $(Threads.nthreads())")
-println("Project Path: $(Pkg.project().path)")
-println("RxInfer Path: $(pathof(RxInfer))")
-
-if !isempty(failed_packages)
+# Run main function and exit with appropriate status
+if !main()
     exit(1)
 end

@@ -1,130 +1,130 @@
-# Meta-analysis of Mountain Car with Active Inference
+"""
+    MetaAnalysis_MountainCar.jl
+
+Main script for running meta-analysis of the Mountain Car environment.
+Compares performance of Active Inference and Naive agents across different physics parameters.
+"""
 
 # Ensure we're in the right environment
 import Pkg
-if !isfile(joinpath(@__DIR__, "Project.toml"))
-    error("Project.toml not found. Please run Setup.jl first")
-end
+Pkg.activate(@__DIR__)
 
-# Activate the project environment
-try
-    Pkg.activate(@__DIR__)
-    Pkg.instantiate()  # Ensure all packages are installed
-catch e
-    error("Failed to activate project environment: $e")
-end
-
-# Load required packages
-using Distributed
-using SharedArrays
-using Statistics
+using RxInfer
+using Logging
+using TOML
 using DataFrames
 using CSV
-using Dates
+using UnicodePlots
+using Statistics
 using Printf
-using TOML
-using ProgressMeter
-using Logging
-using LoggingExtras
-using Plots
-using Measures
+using Dates
 
-# Add workers if not already added
-if nworkers() == 1
-    num_threads = Threads.nthreads()
-    addprocs(num_threads; exeflags=`--project=$(Base.active_project())`)
-    @info "Setting up distributed workers" num_threads=num_threads
-    @info "Workers initialized" num_workers=nworkers()
-end
-
-# First, include and load modules on main process
-include(joinpath(@__DIR__, "MountainCar.jl"))
-include(joinpath(@__DIR__, "meta_analysis_utils.jl"))
-include(joinpath(@__DIR__, "meta_analysis_simulation.jl"))
-include(joinpath(@__DIR__, "meta_analysis_visualization.jl"))
-
-# Import modules on main process
+# Import MountainCar module
+include("MountainCar_Standalone_12-26-2024.jl")
 using .MountainCar
-using .MetaAnalysisUtils
+
+# Import meta-analysis modules
+include("meta_analysis_simulation.jl")
 using .MetaAnalysisSimulation
-using .MetaAnalysisVisualization
 
-# Load all required modules on all workers
-@everywhere begin
-    # Activate project environment on each worker
-    import Pkg
-    Pkg.activate(@__DIR__)
-    
-    # Load required packages
-    using RxInfer
-    using RxInfer: getmodel, getreturnval, getvarref, getvariable
-    using RxInfer.ReactiveMP: getrecent, messageout
-    using HypergeometricFunctions
-    using LinearAlgebra
-    using Statistics
-    using Plots
-    using SharedArrays
-    using Distributed
-    
-    # Include modules in dependency order
-    include(joinpath(@__DIR__, "MountainCar.jl"))
-    include(joinpath(@__DIR__, "meta_analysis_utils.jl"))
-    include(joinpath(@__DIR__, "meta_analysis_simulation.jl"))
-    include(joinpath(@__DIR__, "meta_analysis_visualization.jl"))
-    
-    # Import modules
-    using .MountainCar
-    using .MetaAnalysisUtils
-    using .MetaAnalysisSimulation
-    using .MetaAnalysisVisualization
-end
-
-# Setup logging
-const timestamp = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
-const output_dir = mkpath(joinpath(@__DIR__, "MetaAnalysis_Outputs", timestamp))
-const LOG_FILE = joinpath(output_dir, "meta_analysis.log")
-
-console_logger = ConsoleLogger(stdout, Logging.Info)
-file_logger = SimpleLogger(open(LOG_FILE, "w"), Logging.Debug)
-global_logger(TeeLogger(console_logger, file_logger))
-
-@info "Starting meta-analysis" timestamp output_dir
+include("meta_analysis_utils.jl")
+include("visualization_functions.jl")
 
 # Load configuration
-config_path = joinpath(@__DIR__, "config.toml")
-@info "Loading configuration" config_path
+@info "Loading configuration..."
+config = TOML.parsefile(joinpath(@__DIR__, "config.toml"))
 
-if !isfile(config_path)
-    error("Configuration file not found at: $config_path")
+# Create output directory with timestamp
+timestamp = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
+base_output_dir = joinpath(@__DIR__, "meta_analysis_results", timestamp)
+mkpath(base_output_dir)
+
+# Copy config file to output directory for reference
+cp(joinpath(@__DIR__, "config.toml"), joinpath(base_output_dir, "config.toml"), force=true)
+
+# Setup parameter ranges
+@info "Setting up parameter ranges..."
+force_range = range(
+    Float64(config["meta_analysis"]["min_force"]),
+    Float64(config["meta_analysis"]["max_force"]),
+    length=Int(config["meta_analysis"]["force_steps"])
+)
+friction_range = range(
+    Float64(config["meta_analysis"]["min_friction"]),
+    Float64(config["meta_analysis"]["max_friction"]),
+    length=Int(config["meta_analysis"]["friction_steps"])
+)
+
+# Create simulation batch
+@info "Creating simulation batch..."
+batch = SimulationBatch(
+    force_range=force_range,
+    friction_range=friction_range,
+    n_episodes=Int(config["simulation"]["n_episodes"]),
+    max_steps=Int(config["simulation"]["max_steps"]),
+    planning_horizon=Int(config["simulation"]["planning_horizon"]),
+    initial_state=config["initial_state"],
+    target_state=config["target_state"]
+)
+
+# Run simulations
+@info "Running simulation batch..."
+results = run_simulation_batch(batch)
+
+# Save raw results
+@info "Saving raw results..."
+if config["output"]["save_raw_data"]
+    CSV.write(joinpath(base_output_dir, "raw_results.csv"), results)
 end
 
-config = TOML.parsefile(config_path)
+# Create analysis directories
+analysis_dirs = Dict(
+    "success_rates" => joinpath(base_output_dir, "success_rates"),
+    "performance_metrics" => joinpath(base_output_dir, "performance_metrics"),
+    "energy_analysis" => joinpath(base_output_dir, "energy_analysis"),
+    "control_analysis" => joinpath(base_output_dir, "control_analysis"),
+    "parameter_analysis" => joinpath(base_output_dir, "parameter_analysis"),
+    "trajectory_analysis" => joinpath(base_output_dir, "trajectory_analysis")
+)
 
-# Extract meta-analysis parameters
-n_force = 5  # Number of engine force values to test
-n_friction = 5  # Number of friction values to test
-timesteps = config["simulation"]["timesteps"]
-planning_horizon = config["simulation"]["planning_horizon"]
+for dir in values(analysis_dirs)
+    mkpath(dir)
+end
 
-@info "Configuration loaded" n_force n_friction timesteps planning_horizon
+# Set visualization parameters
+ENV["COLUMNS"] = config["visualization"]["plot_width"]
+ENV["LINES"] = config["visualization"]["plot_height"]
 
-# Create parameter grids
-force_values = range(0.02, 0.06, length=n_force)
-friction_values = range(0.05, 0.15, length=n_friction)
+# Generate visualizations and analyses
+@info "Generating visualizations and analyses..."
 
-# Run parameter sweep
-@info "Starting parameter sweep..."
-batch = MetaAnalysisSimulation.run_simulation_batch(force_values, friction_values, config)
+# Success rate analysis
+@info "Analyzing success rates..."
+plot_success_rate_comparison(results, joinpath(analysis_dirs["success_rates"], "success_rates"))
 
-# Process and visualize results
-@info "Processing results..."
-df = MetaAnalysisVisualization.process_results(batch, output_dir)
+# Performance metrics analysis
+@info "Analyzing performance metrics..."
+plot_performance_metrics(results, joinpath(analysis_dirs["performance_metrics"], "performance_metrics"))
 
-# Create visualizations
-@info "Generating visualizations..."
-MetaAnalysisVisualization.create_parameter_sweep_plots(df, output_dir)
-MetaAnalysisVisualization.create_performance_plots(df, output_dir)
-MetaAnalysisVisualization.create_correlation_plots(df, output_dir)
+# Energy analysis
+@info "Analyzing energy usage..."
+plot_energy_comparison(results, joinpath(analysis_dirs["energy_analysis"], "energy_analysis"))
 
-@info "Meta-analysis complete" output_dir
+# Control analysis
+@info "Analyzing control strategies..."
+plot_control_comparison(results, joinpath(analysis_dirs["control_analysis"], "control_analysis"))
+
+# Parameter sweep analysis
+@info "Analyzing parameter effects..."
+plot_parameter_sweep_analysis(results, joinpath(analysis_dirs["parameter_analysis"], "parameter_analysis"))
+
+# Trajectory analysis
+@info "Analyzing trajectories..."
+plot_trajectory_analysis(results, joinpath(analysis_dirs["trajectory_analysis"], "trajectory_analysis"))
+
+# Generate summary report
+@info "Generating summary report..."
+generate_summary_report(results, base_output_dir)
+
+@info "Meta-analysis complete!" output_dir=base_output_dir
 

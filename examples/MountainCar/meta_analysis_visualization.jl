@@ -1,188 +1,69 @@
+"""
+    MetaAnalysisVisualization
+
+Module for creating visualizations from meta-analysis results.
+Provides comprehensive functions for plotting and analyzing mountain car
+simulation results across different parameters and agent types.
+"""
 module MetaAnalysisVisualization
 
-using Plots
-using Statistics
+using UnicodePlots
 using DataFrames
-using CSV
-using Dates
+using Statistics
 using Printf
-using Measures
+using Dates
 
-# Import required modules
-using ..MountainCar
-using ..MetaAnalysisUtils
-using ..MetaAnalysisSimulation
-
-export process_results, create_parameter_sweep_plots, create_performance_plots, create_correlation_plots
+# Create a timestamped directory for outputs
+function create_output_directory()
+    timestamp = Dates.format(now(), "yyyymmdd_HHMMSS")
+    base_dir = joinpath(@__DIR__, "MetaAnalysis_Outputs", timestamp)
+    mkpath(base_dir)
+    @info "Created output directory" path=base_dir
+    return base_dir
+end
 
 """
-    process_results(batch, output_dir)
+    generate_all_visualizations(results::DataFrame, base_dir::String)
 
-Process simulation results into a DataFrame and save to CSV.
+Generate all available visualizations and analyses for the meta-analysis results.
 """
-function process_results(batch, output_dir)
-    # Create DataFrame from results
-    df = DataFrame(
-        force = Float64[],
-        friction = Float64[],
-        max_position = Float64[],
-        avg_velocity = Float64[],
-        success = Bool[],
-        target_time = Float64[],
-        total_energy = Float64[],
-        oscillations = Float64[],
-        control_effort = Float64[],
-        stability = Float64[],
-        efficiency = Float64[]
+function generate_all_visualizations(results::DataFrame, base_dir::String)
+    @info "Starting visualization generation" output_dir=base_dir
+    
+    # Create subdirectories for different types of visualizations
+    dirs = Dict(
+        "success" => joinpath(base_dir, "success_rates"),
+        "performance" => joinpath(base_dir, "performance_metrics"),
+        "energy" => joinpath(base_dir, "energy_analysis"),
+        "control" => joinpath(base_dir, "control_analysis"),
+        "parameter" => joinpath(base_dir, "parameter_analysis"),
+        "trajectory" => joinpath(base_dir, "trajectory_analysis")
     )
     
-    for result in batch.results
-        push!(df, (
-            result["force"],
-            result["friction"],
-            result["metrics"].max_position,
-            result["metrics"].avg_velocity,
-            result["metrics"].success,
-            result["metrics"].target_time,
-            result["metrics"].total_energy,
-            result["metrics"].oscillations,
-            result["metrics"].control_effort,
-            result["metrics"].stability,
-            result["metrics"].efficiency
-        ))
+    # Create all directories
+    for dir in values(dirs)
+        mkpath(dir)
+        @info "Created visualization subdirectory" path=dir
     end
     
-    # Save results
-    CSV.write(joinpath(output_dir, "meta_analysis_results.csv"), df)
+    # Generate all visualizations
+    plot_success_rate_comparison(results, joinpath(dirs["success"], "success_rates"))
+    plot_performance_metrics(results, joinpath(dirs["performance"], "performance_metrics"))
+    plot_energy_comparison(results, joinpath(dirs["energy"], "energy_analysis"))
+    plot_control_comparison(results, joinpath(dirs["control"], "control_analysis"))
+    plot_parameter_sweep_analysis(results, joinpath(dirs["parameter"], "parameter_sweep"))
+    plot_trajectory_analysis(results, joinpath(dirs["trajectory"], "trajectory_analysis"))
     
-    return df
+    # Generate summary report
+    generate_summary_report(results, base_dir)
+    
+    @info "Completed all visualizations" output_dir=base_dir
 end
 
-"""
-    create_parameter_sweep_plots(df, output_dir)
+# Include all visualization functions
+include("visualization_functions.jl")
 
-Create heatmaps showing how different metrics vary with force and friction.
-"""
-function create_parameter_sweep_plots(df, output_dir)
-    metrics = [
-        ("success", "Success Rate"),
-        ("target_time", "Time to Target"),
-        ("total_energy", "Total Energy"),
-        ("efficiency", "Overall Efficiency")
-    ]
-    
-    force_values = sort(unique(df.force))
-    friction_values = sort(unique(df.friction))
-    n_force = length(force_values)
-    n_friction = length(friction_values)
-    
-    for (metric, title) in metrics
-        data = reshape(df[:, metric], n_force, n_friction)
-        
-        p = heatmap(
-            force_values,
-            friction_values,
-            data',
-            title=title,
-            xlabel="Engine Force",
-            ylabel="Friction Coefficient",
-            color=:viridis,
-            aspect_ratio=:equal,
-            margin=5mm,
-            size=(800, 600),
-            dpi=300
-        )
-        
-        savefig(p, joinpath(output_dir, "$(metric)_heatmap.png"))
-    end
-end
-
-"""
-    create_performance_plots(df, output_dir)
-
-Create plots showing performance metrics distributions and relationships.
-"""
-function create_performance_plots(df, output_dir)
-    # Success rate vs parameters
-    p1 = scatter(
-        df.force,
-        df.friction,
-        color=df.success,
-        title="Success by Parameters",
-        xlabel="Engine Force",
-        ylabel="Friction Coefficient",
-        marker_z=df.success,
-        colorbar_title="Success",
-        legend=false,
-        size=(800, 600),
-        dpi=300,
-        margin=5mm
-    )
-    savefig(p1, joinpath(output_dir, "success_scatter.png"))
-    
-    # Time to target distribution
-    p2 = histogram(
-        df[df.success, :target_time],
-        title="Time to Target Distribution",
-        xlabel="Time Steps",
-        ylabel="Count",
-        legend=false,
-        size=(800, 600),
-        dpi=300,
-        margin=5mm
-    )
-    savefig(p2, joinpath(output_dir, "target_time_hist.png"))
-    
-    # Energy vs Control Effort
-    p3 = scatter(
-        df.total_energy,
-        df.control_effort,
-        color=df.success,
-        title="Energy vs Control Effort",
-        xlabel="Total Energy",
-        ylabel="Control Effort",
-        marker_z=df.success,
-        colorbar_title="Success",
-        legend=false,
-        size=(800, 600),
-        dpi=300,
-        margin=5mm
-    )
-    savefig(p3, joinpath(output_dir, "energy_control_scatter.png"))
-end
-
-"""
-    create_correlation_plots(df, output_dir)
-
-Create correlation matrix and plots between different metrics.
-"""
-function create_correlation_plots(df, output_dir)
-    # Select numeric columns for correlation
-    numeric_cols = [
-        :max_position, :avg_velocity, :target_time,
-        :total_energy, :oscillations, :control_effort,
-        :stability, :efficiency
-    ]
-    
-    # Calculate correlation matrix
-    cor_matrix = cor(Matrix(df[:, numeric_cols]))
-    
-    # Create correlation heatmap
-    p = heatmap(
-        string.(numeric_cols),
-        string.(numeric_cols),
-        cor_matrix,
-        title="Metric Correlations",
-        color=:RdBu,
-        clim=(-1, 1),
-        aspect_ratio=:equal,
-        xrotation=45,
-        size=(1000, 800),
-        dpi=300,
-        margin=10mm
-    )
-    
-    savefig(p, joinpath(output_dir, "correlation_matrix.png"))
-end
+# Export the main visualization function
+export generate_all_visualizations
 
 end # module 
