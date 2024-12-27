@@ -1,113 +1,187 @@
-# Mountain Car Meta-Analysis
+# RxInfer Mountain Car Implementation and Meta-Analysis
 
-This directory contains the implementation of a meta-analysis comparing the performance of Active Inference and Naive agents in the Mountain Car environment across different physics parameters.
+This directory contains a comprehensive implementation of the Mountain Car environment with both standalone simulation capabilities and meta-analysis tools. The implementation features a comparison between Active Inference and Naive control strategies across various physics parameters.
 
-## Overview
+## Project Structure
 
-The meta-analysis explores how different combinations of engine force and friction coefficients affect the performance of two types of agents:
-1. **Active Inference Agent**: Uses Bayesian inference to plan actions based on a generative model of the environment
-2. **Naive Agent**: Uses a simple heuristic strategy (push in direction of motion)
+```
+MountainCar/
+├── MountainCar_Standalone_12-26-2024.jl  # Standalone simulation
+├── MetaAnalysis_MountainCar.jl           # Meta-analysis main script
+├── meta_analysis_simulation.jl           # Simulation batch handling
+├── meta_analysis_utils.jl                # Analysis utilities
+├── meta_analysis_visualization.jl        # Visualization module
+├── visualization_functions.jl            # Detailed visualization functions
+├── MountainCar.jl                       # Core environment implementation
+├── MountainCar_Methods.jl               # Core methods and physics
+├── shared_logging.jl                    # Logging utilities
+├── config.toml                          # Configuration file
+└── Project.toml                         # Project dependencies
+```
 
-## Files
+## Features
 
-- `MetaAnalysis_MountainCar.jl`: Main script for running the meta-analysis
-- `meta_analysis_simulation.jl`: Module for running batches of simulations
-- `meta_analysis_utils.jl`: Utility functions for metrics calculation
-- `visualization_functions.jl`: Functions for generating visualizations and analyses
-- `MountainCar.jl`: Implementation of the Mountain Car environment and agents
-- `config.toml`: Configuration file for meta-analysis parameters
+### Standalone Implementation
+- **Physics Engine**: Configurable physics with adjustable engine force and friction
+- **Active Inference Agent**: 
+  - Bayesian inference-based planning
+  - Configurable planning horizon
+  - Adaptive belief updates
+  - Future state prediction
+- **Naive Agent**: 
+  - Momentum-based heuristic control
+  - Direction-based decision making
+- **Real-time Visualization**: 
+  - Position and velocity tracking
+  - Energy consumption monitoring
+  - Control action visualization
 
-## Running the Analysis
+### Meta-Analysis Framework
+- **Parameter Space Exploration**:
+  - Engine force range: ${config["meta_analysis"]["min_force"]} to ${config["meta_analysis"]["max_force"]}
+  - Friction range: ${config["meta_analysis"]["min_friction"]} to ${config["meta_analysis"]["max_friction"]}
+  - ${config["meta_analysis"]["force_steps"]} × ${config["meta_analysis"]["friction_steps"]} parameter combinations
+  - ${config["simulation"]["n_episodes"]} episodes per combination
 
-1. Ensure you have Julia installed and the required packages:
+- **Comprehensive Metrics**:
+  1. Success Rate Analysis
+     - Parameter-dependent success rates
+     - Agent performance comparison
+     - Statistical significance testing
+  
+  2. Performance Metrics
+     - Completion time statistics
+     - Energy efficiency metrics
+     - Control effort analysis
+     - Stability measures
+     - Oscillation patterns
+  
+  3. Trajectory Analysis
+     - Position and velocity distributions
+     - Phase space analysis
+     - Energy landscape mapping
+     - Control strategy characterization
+
+- **Visualization Suite**:
+  - Success rate heatmaps
+  - Performance metric plots
+  - Energy usage comparisons
+  - Control effort visualizations
+  - Parameter sweep analyses
+  - Trajectory visualizations
+
+## Setup and Usage
+
+1. **Environment Setup**:
    ```julia
-   using Pkg
-   Pkg.activate(".")
-   Pkg.instantiate()
+   # Run setup script
+   julia Setup.jl
    ```
+   This will:
+   - Activate the project environment
+   - Install required dependencies
+   - Build RxInfer
+   - Create necessary directories
 
-2. Run the meta-analysis:
+2. **Running Standalone Simulation**:
    ```julia
-   include("MetaAnalysis_MountainCar.jl")
+   # Run standalone simulation
+   julia --project=. MountainCar_Standalone_12-26-2024.jl
    ```
+   This provides:
+   - Single episode simulation
+   - Real-time visualization
+   - Detailed trajectory analysis
 
-3. Results will be saved in the `meta_analysis_results` directory with a timestamp.
-
-## Analysis Outputs
-
-The meta-analysis generates several types of analyses:
-
-1. **Success Rate Analysis**
-   - Heatmaps showing success rates for different parameter combinations
-   - Comparison between agent types
-
-2. **Performance Metrics**
-   - Success rate
-   - Average completion time
-   - Energy usage
-   - Control efficiency
-   - Stability
-   - Oscillations
-
-3. **Energy Analysis**
-   - Total energy distribution
-   - Energy vs Success Rate
-   - Energy vs Completion Time
-   - Energy Efficiency
-
-4. **Control Analysis**
-   - Control effort distribution
-   - Stability metrics
-   - Oscillation patterns
-   - Control strategy comparison
-
-5. **Parameter Analysis**
-   - Effect of force on success rate
-   - Effect of friction on success rate
-   - Best parameter combinations
-
-6. **Trajectory Analysis**
-   - Position distributions
-   - Velocity patterns
-   - Success characteristics
+3. **Running Meta-Analysis**:
+   ```julia
+   # Run meta-analysis
+   julia --project=. MetaAnalysis_MountainCar.jl
+   ```
+   This generates:
+   - Parameter sweep results
+   - Comparative analyses
+   - Visualization outputs
+   - Summary reports
 
 ## Configuration
 
-The `config.toml` file allows customization of:
-- Number of episodes per parameter combination
-- Maximum steps per episode
-- Initial and target states
-- Force and friction parameter ranges
+### Standalone Configuration
+- Initial state: position = ${config["initial_state"]["position"]}, velocity = ${config["initial_state"]["velocity"]}
+- Target state: position = ${config["target_state"]["position"]}, velocity = ${config["target_state"]["velocity"]}
+- Maximum steps: ${config["simulation"]["max_steps"]}
+- Planning horizon: ${config["simulation"]["planning_horizon"]}
+
+### Meta-Analysis Configuration
+Edit `config.toml` to adjust:
+- Parameter ranges
+- Number of episodes
+- Simulation parameters
 - Visualization settings
+- Output preferences
 
-## Metrics
+## Output Structure
 
-The analysis calculates several metrics:
+Meta-analysis results are organized as follows:
+```
+meta_analysis_results/
+└── TIMESTAMP/
+    ├── success_rates/          # Success rate analyses
+    ├── performance_metrics/    # Performance comparisons
+    ├── energy_analysis/       # Energy usage studies
+    ├── control_analysis/      # Control strategy analysis
+    ├── parameter_analysis/    # Parameter effect studies
+    ├── trajectory_analysis/   # Trajectory characteristics
+    ├── raw_results.csv       # Raw simulation data
+    ├── summary_report.txt    # Comprehensive summary
+    └── config.toml           # Configuration snapshot
+```
 
-1. **Success Rate**: Percentage of episodes where the agent reaches the target
-2. **Completion Time**: Steps taken to reach the target
-3. **Energy Usage**: Total energy consumed during the episode
-4. **Control Effort**: Sum of absolute control actions
-5. **Stability**: Variance of position around target
-6. **Oscillations**: Number of direction changes
-7. **Efficiency**: Combined metric of success, time, and energy usage
+## Current Status
 
-## Results Format
+### Standalone Implementation
+- ✅ Core physics engine
+- ✅ Active Inference agent
+- ✅ Naive control agent
+- ✅ Real-time visualization
+- ✅ Energy tracking
+- ✅ Performance metrics
 
-Results are saved in text files with detailed analyses and plots:
-- Raw data in CSV format
-- Success rate matrices
-- Performance comparisons
-- Energy usage analysis
-- Control strategy analysis
-- Parameter sweep results
-- Trajectory characteristics
-- Summary report with key findings
+### Meta-Analysis Framework
+- ✅ Parameter sweep functionality
+- ✅ Batch simulation handling
+- ✅ Success rate analysis
+- ✅ Performance metrics
+- ✅ Energy analysis
+- ✅ Control analysis
+- ✅ Trajectory analysis
+- ✅ Visualization suite
+- ✅ Summary reporting
 
-## Extending the Analysis
+## Dependencies
 
-To modify or extend the analysis:
-1. Adjust parameters in `config.toml`
-2. Add new metrics in `meta_analysis_utils.jl`
-3. Create new visualization functions in `visualization_functions.jl`
-4. Modify the main script to include additional analyses
+Key packages:
+- RxInfer: Active Inference framework
+- DataFrames: Data manipulation
+- UnicodePlots: Terminal-based plotting
+- Statistics: Statistical analysis
+- Printf: Formatted output
+- TOML: Configuration handling
+
+## Contributing
+
+To extend or modify:
+1. Fork the repository
+2. Create a feature branch
+3. Add new metrics in `meta_analysis_utils.jl`
+4. Add visualizations in `visualization_functions.jl`
+5. Update configuration in `config.toml`
+6. Submit a pull request
+
+## License
+
+This project is part of RxInfer.jl and is licensed under the same terms.
+
+## Acknowledgments
+
+This implementation builds on the RxInfer.jl framework and extends it with comprehensive meta-analysis capabilities for the Mountain Car environment.

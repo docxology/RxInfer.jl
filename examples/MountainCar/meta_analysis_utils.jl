@@ -119,60 +119,121 @@ end
 """
     generate_summary_report(results::DataFrame, output_dir::String)
 
-Generate a detailed summary report of the meta-analysis results.
+Generate a comprehensive summary report of the meta-analysis results.
 """
 function generate_summary_report(results::DataFrame, output_dir::String)
-    # Analyze results
-    summary_stats = analyze_results(results)
-    
-    # Create report string
-    report = """
-    # Mountain Car Meta-Analysis Summary Report
-    
-    ## Overview
-    - Total simulations: $(nrow(results))
-    - Parameter combinations tested: $(length(unique(zip(results.force, results.friction))))
-    - Timestamp: $(Dates.now())
-    
-    ## Performance Comparison
-    
-    ### Success Rates
-    """
-    
-    for (agent, stats) in summary_stats
-        report *= """
-        
-        ### $agent Agent Performance
-        - Success Rate: $(round(stats["success_rate"] * 100, digits=2))%
-        - Average Time to Target: $(round(stats["avg_target_time"], digits=2)) steps
-        - Average Energy Usage: $(round(stats["avg_energy"], digits=2))
-        - Average Efficiency: $(round(stats["avg_efficiency"], digits=2))
-        - Average Stability: $(round(stats["avg_stability"], digits=2))
-        - Average Oscillations: $(round(stats["avg_oscillations"], digits=2))
-        - Average Control Effort: $(round(stats["avg_control_effort"], digits=2))
-        - Maximum Position Reached: $(round(stats["max_position_reached"], digits=2))
-        - Average Velocity: $(round(stats["avg_velocity"], digits=2))
-        """
-    end
-    
-    # Add parameter analysis
-    report *= """
-    
-    ## Parameter Analysis
-    
-    ### Effect of Engine Force
-    - Minimum force tested: $(minimum(results.force))
-    - Maximum force tested: $(maximum(results.force))
-    - Optimal force range: $(mean(results[results.success, :force]) ± std(results[results.success, :force]))
-    
-    ### Effect of Friction
-    - Minimum friction tested: $(minimum(results.friction))
-    - Maximum friction tested: $(maximum(results.friction))
-    - Optimal friction range: $(mean(results[results.success, :friction]) ± std(results[results.success, :friction]))
-    """
-    
-    # Write report to file
-    open(joinpath(output_dir, "summary_report.md"), "w") do io
-        write(io, report)
+    try
+        open(joinpath(output_dir, "summary_report.txt"), "w") do io
+            println(io, "=== Meta-Analysis Summary Report ===\n")
+            println(io, "Analysis timestamp: $(Dates.format(now(), "yyyy-mm-dd HH:MM:SS"))")
+            println(io, "-" ^ 50, "\n")
+            
+            # Overall statistics
+            println(io, "Overall Statistics:")
+            println(io, "-" ^ 20)
+            
+            n_total = nrow(results)
+            n_successful = count(results.success)
+            overall_success_rate = n_successful / n_total * 100
+            
+            println(io, "Total simulations: $n_total")
+            println(io, "Successful runs: $n_successful")
+            println(io, "Overall success rate: $(@sprintf("%.2f%%", overall_success_rate))")
+            
+            # Agent comparison
+            println(io, "\nAgent Comparison:")
+            println(io, "-" ^ 20)
+            
+            for agent in unique(results.agent_type)
+                agent_results = filter(r -> r.agent_type == agent, results)
+                n_agent = nrow(agent_results)
+                n_agent_success = count(agent_results.success)
+                agent_success_rate = n_agent_success / n_agent * 100
+                
+                println(io, "\n$(titlecase(agent)) Agent:")
+                println(io, "  Total runs: $n_agent")
+                println(io, "  Successful runs: $n_agent_success")
+                println(io, "  Success rate: $(@sprintf("%.2f%%", agent_success_rate))")
+                
+                # Performance metrics with confidence intervals
+                if :target_time in propertynames(agent_results)
+                    successful_times = filter(isfinite, agent_results.target_time)
+                    if !isempty(successful_times)
+                        mean_time = mean(successful_times)
+                        std_time = std(successful_times)
+                        ci_95_time = 1.96 * std_time / sqrt(length(successful_times))
+                        println(io, "  Average completion time: $(@sprintf("%.2f", mean_time)) (95% CI: $(@sprintf("%.2f", mean_time - ci_95_time)) - $(@sprintf("%.2f", mean_time + ci_95_time)))")
+                    end
+                end
+                
+                if :total_energy in propertynames(agent_results)
+                    mean_energy = mean(agent_results.total_energy)
+                    std_energy = std(agent_results.total_energy)
+                    ci_95_energy = 1.96 * std_energy / sqrt(n_agent)
+                    println(io, "  Average energy usage: $(@sprintf("%.3f", mean_energy)) (95% CI: $(@sprintf("%.3f", mean_energy - ci_95_energy)) - $(@sprintf("%.3f", mean_energy + ci_95_energy)))")
+                end
+                
+                if :control_effort in propertynames(agent_results)
+                    mean_effort = mean(agent_results.control_effort)
+                    std_effort = std(agent_results.control_effort)
+                    ci_95_effort = 1.96 * std_effort / sqrt(n_agent)
+                    println(io, "  Average control effort: $(@sprintf("%.3f", mean_effort)) (95% CI: $(@sprintf("%.3f", mean_effort - ci_95_effort)) - $(@sprintf("%.3f", mean_effort + ci_95_effort)))")
+                end
+            end
+            
+            # Parameter analysis
+            println(io, "\nParameter Analysis:")
+            println(io, "-" ^ 20)
+            
+            for param in [:force, :friction]
+                println(io, "\n$(titlecase(string(param))) Effect:")
+                param_values = sort(unique(results[:, param]))
+                println(io, "  Range: $(@sprintf("%.3f", minimum(param_values))) - $(@sprintf("%.3f", maximum(param_values)))")
+                
+                for agent in unique(results.agent_type)
+                    agent_results = filter(r -> r.agent_type == agent, results)
+                    best_param_idx = argmax([
+                        mean(filter(r -> r[param] == val, agent_results).success)
+                        for val in param_values
+                    ])
+                    best_param = param_values[best_param_idx]
+                    success_at_best = mean(filter(r -> r[param] == best_param, agent_results).success) * 100
+                    
+                    println(io, "  $(titlecase(agent)) Agent optimal $(param): $(@sprintf("%.3f", best_param)) (Success rate: $(@sprintf("%.2f%%", success_at_best)))")
+                end
+            end
+            
+            # Success rate comparison
+            if length(unique(results.agent_type)) == 2
+                println(io, "\nAgent Performance Comparison:")
+                println(io, "-" ^ 20)
+                
+                agent_types = collect(unique(results.agent_type))
+                agent1_results = filter(r -> r.agent_type == agent_types[1], results)
+                agent2_results = filter(r -> r.agent_type == agent_types[2], results)
+                
+                success_rate1 = mean(agent1_results.success) * 100
+                success_rate2 = mean(agent2_results.success) * 100
+                
+                # Calculate confidence intervals for success rates
+                n1 = nrow(agent1_results)
+                n2 = nrow(agent2_results)
+                ci_95_1 = 1.96 * sqrt(success_rate1 * (100 - success_rate1) / n1)
+                ci_95_2 = 1.96 * sqrt(success_rate2 * (100 - success_rate2) / n2)
+                
+                println(io, "$(titlecase(agent_types[1])) success rate: $(@sprintf("%.2f%%", success_rate1)) (95% CI: $(@sprintf("%.2f%%", success_rate1 - ci_95_1)) - $(@sprintf("%.2f%%", success_rate1 + ci_95_1)))")
+                println(io, "$(titlecase(agent_types[2])) success rate: $(@sprintf("%.2f%%", success_rate2)) (95% CI: $(@sprintf("%.2f%%", success_rate2 - ci_95_2)) - $(@sprintf("%.2f%%", success_rate2 + ci_95_2)))")
+                
+                diff = success_rate2 - success_rate1
+                ci_95_diff = 1.96 * sqrt((ci_95_1/1.96)^2 + (ci_95_2/1.96)^2)
+                
+                println(io, "\nDifference ($(titlecase(agent_types[2])) - $(titlecase(agent_types[1]))):")
+                println(io, "  $(@sprintf("%.2f%%", diff)) (95% CI: $(@sprintf("%.2f%%", diff - ci_95_diff)) - $(@sprintf("%.2f%%", diff + ci_95_diff)))")
+                println(io, "  Relative improvement: $(@sprintf("%.2f%%", abs(diff) / success_rate1 * 100))")
+                println(io, "  Better agent: $(diff > 0 ? titlecase(agent_types[2]) : titlecase(agent_types[1]))")
+            end
+        end
+    catch e
+        @error "Failed to generate summary report" exception=(e, catch_backtrace())
     end
 end 

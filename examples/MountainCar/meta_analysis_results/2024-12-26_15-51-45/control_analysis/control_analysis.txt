@@ -1,0 +1,98 @@
+=== Control Strategy Analysis ===
+
+Analysis timestamp: 2024-12-26 15:54:18
+==================================================
+
+                      ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀Average Control Effort⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ 
+                      ┌────────────────────────────────────────┐ 
+                  200 │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠢⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠉⠒⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠈⠒⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⠢⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+   Control Effort     │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠢⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠢⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠒⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⣀⠀⠀⠀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⠢⣀⠀⠀⠀│ 
+                      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⠢⢄│ 
+                  120 │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈│ 
+                      └────────────────────────────────────────┘ 
+                      ⠀1⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀2⠀ 
+                      ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀Agent Type⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ 
+
+
+Control Statistics:
+
+naive Agent:
+  Average Control Effort: 192.600
+  Control Effort Std Dev: 36.621
+  Average Oscillations: 22.160
+
+active Agent:
+  Average Control Effort: 125.080
+  Control Effort Std Dev: 93.494
+  Average Oscillations: 8.280
+
+Detailed Control Analysis:
+
+Active Agent Control Effort Distribution:
+  Mean Effort: 125.080
+  Median Effort: 86.027
+  Min Effort: 33.162
+  Max Effort: 292.972
+  Effort Std Dev: 93.494
+
+Active Agent Oscillation Metrics:
+  Mean Oscillations: 8.280
+  Median Oscillations: 6.000
+  Min Oscillations: 2.000
+  Max Oscillations: 21.000
+  Oscillations Std Dev: 6.931
+
+Naive Agent Control Effort Distribution:
+  Mean Effort: 192.600
+  Median Effort: 200.000
+  Min Effort: 15.000
+  Max Effort: 200.000
+  Effort Std Dev: 36.621
+
+Naive Agent Oscillation Metrics:
+  Mean Oscillations: 22.160
+  Median Oscillations: 22.000
+  Min Oscillations: 1.000
+  Max Oscillations: 30.000
+  Oscillations Std Dev: 6.393
+
+Control Analysis by Success Status:
+
+Active Agent:
+  Unsuccessful Runs:
+    Mean Control Effort: 125.080
+    Control Effort Std Dev: 93.494
+    Mean Oscillations: 8.280
+
+Naive Agent:
+  Successful Runs:
+    Mean Control Effort: 15.000
+    Control Effort Std Dev: 0.000
+    Mean Oscillations: 1.000
+  Unsuccessful Runs:
+    Mean Control Effort: 200.000
+    Control Effort Std Dev: 0.000
+    Mean Oscillations: 23.042
+
+Control Metric Correlations:
+
+Active Agent:
+  Control Effort vs Success: NaN
+  Oscillations vs Success: NaN
+  Control Effort vs Oscillations: 0.761
+
+Naive Agent:
+  Control Effort vs Success: -1.000
+  Oscillations vs Success: -0.682
+  Control Effort vs Oscillations: 0.682

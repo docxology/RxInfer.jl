@@ -1,0 +1,87 @@
+=== Energy Usage Analysis ===
+
+Analysis timestamp: 2024-12-26 15:58:42
+==================================================
+
+            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀Average Energy Usage⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ 
+            ┌────────────────────────────────────────┐ 
+          1 │⠢⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠑⠢⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠑⠢⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+   Energy   │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠒⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠒⢄⡀⠀⠀⠀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠒⢄⡀⠀⠀│ 
+            │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠒⢄│ 
+          0 │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│ 
+            └────────────────────────────────────────┘ 
+            ⠀1⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀2⠀ 
+            ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀Agent Type⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ 
+
+
+Energy Statistics:
+
+naive Agent:
+  Average Energy: 0.969
+  Energy Std Dev: 0.867
+  Average Efficiency: 0.000
+
+active Agent:
+  Average Energy: 0.069
+  Energy Std Dev: 0.185
+  Average Efficiency: 671.642
+
+Energy vs Success Correlation:
+  active: -0.242
+  naive: NaN
+
+Detailed Energy Analysis:
+
+Active Agent Energy Distribution:
+  Mean Energy: 0.069
+  Median Energy: 0.006
+  Min Energy: -0.119
+  Max Energy: 0.382
+  Energy Std Dev: 0.185
+
+Active Agent Efficiency Metrics:
+  Mean Efficiency: 671.642
+  Median Efficiency: 0.000
+  Min Efficiency: -2156.104
+  Max Efficiency: 6966.229
+  Efficiency Std Dev: 2417.283
+
+Naive Agent Energy Distribution:
+  Mean Energy: 0.969
+  Median Energy: 1.077
+  Min Energy: -0.120
+  Max Energy: 2.114
+  Energy Std Dev: 0.867
+
+Naive Agent Efficiency Metrics:
+  Mean Efficiency: 0.000
+  Median Efficiency: 0.000
+  Min Efficiency: 0.000
+  Max Efficiency: 0.000
+  Efficiency Std Dev: 0.000
+
+Energy Analysis by Success Status:
+
+Active Agent:
+  Successful Runs:
+    Mean Energy: 0.007
+    Energy Std Dev: 0.021
+  Unsuccessful Runs:
+    Mean Energy: 0.100
+    Energy Std Dev: 0.222
+
+Naive Agent:
+  Unsuccessful Runs:
+    Mean Energy: 0.969
+    Energy Std Dev: 0.867
