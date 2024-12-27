@@ -185,14 +185,15 @@ end
     plot_success_rate_comparison(results_df::DataFrame, output_path::String)
 
 Create success rate comparison plots.
+Returns Vector{ASCIIPlot}.
 """
-function plot_success_rate_comparison(results_df::DataFrame, output_path::String)
+function plot_success_rate_comparison(results_df::DataFrame, output_path::String)::Vector{ASCIIPlot}
     try
         # Calculate success rates for each agent type and parameter combination
         success_df = calculate_success_rate(results_df, [:agent_type, :force, :friction])
         
         # Create output file
-        plots = []
+        plots = ASCIIPlot[]
         open("$(output_path).txt", "w") do io
             println(io, "Success Rate Comparison")
             println(io, "=====================\n")
@@ -228,14 +229,14 @@ function plot_success_rate_comparison(results_df::DataFrame, output_path::String
                 # Create heatmap
                 println(io, "\nSuccess Rate Heatmap for $(titlecase(agent_type)):")
                 hm = create_ascii_heatmap(success_matrix, "Success Rate (%)")
-                println(io, hm)
+                println(io, hm.plot)
                 push!(plots, hm)
             end
         end
         return plots
     catch e
         @warn "Failed to create success rate comparison" exception=e
-        return []
+        return ASCIIPlot[]
     end
 end
 
@@ -243,10 +244,11 @@ end
     plot_performance_metrics(results_df::DataFrame, output_path::String)
 
 Create performance metrics comparison plots.
+Returns Vector{ASCIIPlot}.
 """
-function plot_performance_metrics(results_df::DataFrame, output_path::String)
+function plot_performance_metrics(results_df::DataFrame, output_path::String)::Vector{ASCIIPlot}
     try
-        plots = []
+        plots = ASCIIPlot[]
         # Calculate metrics by agent type
         metrics_df = combine(groupby(results_df, :agent_type)) do group_df
             (
@@ -284,7 +286,7 @@ function plot_performance_metrics(results_df::DataFrame, output_path::String)
                         data[!, metric],
                         "$(titlecase(agent_type)) - $(titlecase(String(metric)))"
                     )
-                    println(io, p)
+                    println(io, p.plot)
                     push!(plots, p)
                 end
             end
@@ -292,7 +294,7 @@ function plot_performance_metrics(results_df::DataFrame, output_path::String)
         return plots
     catch e
         @warn "Failed to create performance metrics plots" exception=e
-        return []
+        return ASCIIPlot[]
     end
 end
 
@@ -300,9 +302,11 @@ end
     plot_energy_comparison(results_df::DataFrame, output_path::String)
 
 Create energy usage comparison plots.
+Returns Vector{ASCIIPlot}.
 """
-function plot_energy_comparison(results_df::DataFrame, output_path::String)
+function plot_energy_comparison(results_df::DataFrame, output_path::String)::Vector{ASCIIPlot}
     try
+        plots = ASCIIPlot[]
         # Calculate energy metrics by agent type and parameter combination
         energy_df = combine(groupby(results_df, [:agent_type, :force, :friction])) do group_df
             (
@@ -334,11 +338,14 @@ function plot_energy_comparison(results_df::DataFrame, output_path::String)
                     collect(skipmissing(data.total_energy)),
                     "$(titlecase(agent_type)) Energy Distribution"
                 )
-                println(io, p)
+                println(io, p.plot)
+                push!(plots, p)
             end
         end
+        return plots
     catch e
         @warn "Failed to create energy comparison plots" exception=e
+        return ASCIIPlot[]
     end
 end
 
@@ -346,10 +353,11 @@ end
     plot_control_comparison(results_df::DataFrame, output_path::String)
 
 Create control strategy comparison plots.
+Returns Vector{ASCIIPlot}.
 """
-function plot_control_comparison(results_df::DataFrame, output_path::String)
+function plot_control_comparison(results_df::DataFrame, output_path::String)::Vector{ASCIIPlot}
     try
-        plots = []
+        plots = ASCIIPlot[]
         open("$(output_path).txt", "w") do io
             println(io, "Control Strategy Analysis")
             println(io, "=======================\n")
@@ -371,14 +379,14 @@ function plot_control_comparison(results_df::DataFrame, output_path::String)
                     collect(skipmissing(data.control_effort)),
                     "$(titlecase(agent_type)) Control Effort"
                 )
-                println(io, p)
+                println(io, p.plot)
                 push!(plots, p)
             end
         end
         return plots
     catch e
         @warn "Failed to create control comparison plots" exception=e
-        return []
+        return ASCIIPlot[]
     end
 end
 
@@ -386,9 +394,11 @@ end
     plot_parameter_sweep_analysis(results_df::DataFrame, output_path::String)
 
 Create parameter sweep analysis plots.
+Returns Vector{ASCIIPlot}.
 """
-function plot_parameter_sweep_analysis(results_df::DataFrame, output_path::String)
+function plot_parameter_sweep_analysis(results_df::DataFrame, output_path::String)::Vector{ASCIIPlot}
     try
+        plots = ASCIIPlot[]
         open("$(output_path).txt", "w") do io
             println(io, "Parameter Sweep Analysis")
             println(io, "======================\n")
@@ -408,7 +418,8 @@ function plot_parameter_sweep_analysis(results_df::DataFrame, output_path::Strin
                     force_effect.success_rate,
                     "Success Rate vs Force"
                 )
-                println(io, p)
+                println(io, p.plot)
+                push!(plots, p)
                 
                 # Friction effect
                 friction_effect = combine(groupby(data, :friction)) do group_df
@@ -420,11 +431,14 @@ function plot_parameter_sweep_analysis(results_df::DataFrame, output_path::Strin
                     friction_effect.success_rate,
                     "Success Rate vs Friction"
                 )
-                println(io, p)
+                println(io, p.plot)
+                push!(plots, p)
             end
         end
+        return plots
     catch e
         @warn "Failed to create parameter sweep analysis" exception=e
+        return ASCIIPlot[]
     end
 end
 
@@ -432,9 +446,11 @@ end
     plot_trajectory_analysis(results_df::DataFrame, output_path::String)
 
 Create trajectory analysis plots.
+Returns Vector{ASCIIPlot}.
 """
-function plot_trajectory_analysis(results_df::DataFrame, output_path::String)
+function plot_trajectory_analysis(results_df::DataFrame, output_path::String)::Vector{ASCIIPlot}
     try
+        plots = ASCIIPlot[]
         open("$(output_path).txt", "w") do io
             println(io, "Trajectory Analysis")
             println(io, "==================\n")
@@ -455,11 +471,22 @@ function plot_trajectory_analysis(results_df::DataFrame, output_path::String)
                     println(io, "    Average Final Position: $(round(mean(success_data.final_position), digits=3))")
                     println(io, "    Average Final Velocity: $(round(mean(success_data.final_velocity), digits=3))")
                     println(io, "    Average Completion Time: $(round(mean(success_data.completion_time), digits=1)) steps")
+                    
+                    # Add trajectory plots
+                    p = create_ascii_lineplot(
+                        1:nrow(success_data),
+                        success_data.final_position,
+                        "Final Positions (Successful)"
+                    )
+                    println(io, p.plot)
+                    push!(plots, p)
                 end
             end
         end
+        return plots
     catch e
         @warn "Failed to create trajectory analysis" exception=e
+        return ASCIIPlot[]
     end
 end
 
