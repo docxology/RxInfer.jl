@@ -1,0 +1,22 @@
+Trajectory Analysis
+==================
+
+Success vs Failure Analysis:
+
+Naive:
+  Successful Trajectories: 12
+  Failed Trajectories: 438
+
+  Successful Trajectory Characteristics:
+    Average Final Position: 0.5
+    Average Final Velocity: 0.017
+    Average Completion Time: 27.5 steps
+
+Active_Inference:
+  Successful Trajectories: 68
+  Failed Trajectories: 382
+
+  Successful Trajectory Characteristics:
+    Average Final Position: 0.501
+    Average Final Velocity: 0.014
+    Average Completion Time: 48.0 steps

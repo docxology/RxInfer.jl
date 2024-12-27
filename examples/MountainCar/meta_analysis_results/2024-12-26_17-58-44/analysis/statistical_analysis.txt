@@ -1,0 +1,63 @@
+Statistical Analysis Results
+=========================
+
+Metric: Energy Usage
+-----------------
+Active Inference:
+  Mean: 19.3144
+  Std:  17.1389
+Naive Agent:
+  Mean: 86.9017
+  Std:  59.5994
+
+Statistical Test Results:
+  t-statistic: -23.1194
+  p-value:     0.0
+  DOF:         522.7565
+
+
+Metric: Success Rate
+-----------------
+Active Inference:
+  Mean: 0.1511
+  Std:  0.3586
+Naive Agent:
+  Mean: 0.0267
+  Std:  0.1613
+
+Statistical Test Results:
+  t-statistic: 6.7145
+  p-value:     0.0
+  DOF:         623.5553
+
+
+Metric: Control Effort
+-----------------
+Active Inference:
+  Mean: 61.505
+  Std:  51.0516
+Naive Agent:
+  Mean: 98.0667
+  Std:  12.0045
+
+Statistical Test Results:
+  t-statistic: -14.7889
+  p-value:     0.0
+  DOF:         498.5013
+
+
+Metric: Completion Time
+-----------------
+Active Inference:
+  Mean: 92.1467
+  Std:  18.7344
+Naive Agent:
+  Mean: 98.0667
+  Std:  12.0045
+
+Statistical Test Results:
+  t-statistic: -5.644
+  p-value:     0.0
+  DOF:         764.5178
+
+
