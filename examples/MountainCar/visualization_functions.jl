@@ -5,9 +5,12 @@ Contains visualization functions for the Mountain Car meta-analysis.
 """
 module MetaAnalysisVisualization
 
+# Import all needed plotting functionality
 import UnicodePlots
 import Plots
-import StatsPlots  # Required for boxplots
+import StatsPlots
+using Plots: savefig, plot, heatmap, scatter!, plot!
+using StatsPlots: violin, violin!
 using Statistics
 using Printf
 using DataFrames
@@ -15,35 +18,60 @@ using Dates
 using StatsBase
 using HypothesisTests
 
+# Define plot types for type safety
+abstract type VisualizationPlot end
+struct ASCIIPlot <: VisualizationPlot
+    plot::UnicodePlots.Plot
+end
+struct StandardPlot <: VisualizationPlot
+    plot::Plots.Plot
+end
+
 export plot_success_rate_comparison, plot_performance_metrics, plot_energy_comparison,
        plot_control_comparison, plot_parameter_sweep_analysis, plot_trajectory_analysis,
-       create_comparative_heatmaps, perform_anova_analysis, generate_summary_report
+       create_comparative_heatmaps, perform_anova_analysis, generate_summary_report,
+       save_plot_safely, VisualizationPlot, ASCIIPlot, StandardPlot
 
 # Helper function to create a heatmap with UnicodePlots
-function create_heatmap(data::Matrix, title::String)
-    return UnicodePlots.heatmap(data, 
-        title=title,
-        colormap=:viridis,
-        width=40,
-        height=15
+function create_ascii_heatmap(data::Matrix, title::String)
+    ASCIIPlot(
+        UnicodePlots.heatmap(data, 
+            title=title,
+            colormap=:viridis,
+            width=150,
+            height=50,
+            border=:ascii,
+            xlabel="Friction",
+            ylabel="Force"
+        )
     )
 end
 
 # Helper function to create a line plot
-function create_lineplot(x::AbstractVector, y::AbstractVector, title::String)
-    return UnicodePlots.lineplot(x, y,
-        title=title,
-        width=40,
-        height=15
+function create_ascii_lineplot(x::AbstractVector, y::AbstractVector, title::String)
+    ASCIIPlot(
+        UnicodePlots.lineplot(x, y,
+            title=title,
+            width=150,
+            height=50,
+            border=:ascii,
+            xlabel="Step",
+            ylabel="Value"
+        )
     )
 end
 
 # Helper function to create a histogram
-function create_histogram(data::AbstractVector, title::String)
-    return UnicodePlots.histogram(data,
-        title=title,
-        width=40,
-        height=15
+function create_ascii_histogram(data::AbstractVector, title::String)
+    ASCIIPlot(
+        UnicodePlots.histogram(data,
+            title=title,
+            width=150,
+            height=50,
+            border=:ascii,
+            xlabel="Value",
+            ylabel="Count"
+        )
     )
 end
 
@@ -54,13 +82,39 @@ function ensure_directory(path::String)
     end
 end
 
-# Helper function to save plot safely
-function save_plot_safely(plot, path::String, metric::String)
+# Helper function to save plot safely with proper type handling
+function save_plot_safely(plot::VisualizationPlot, path::String, metric::String)
     try
         ensure_directory(dirname(path))
-        Plots.savefig(plot, path)
+        if plot isa ASCIIPlot
+            # For ASCII plots, save to text file
+            open(path * ".txt", "w") do io
+                println(io, plot.plot)
+            end
+            # Also display in terminal for immediate feedback
+            display(plot.plot)
+        elseif plot isa StandardPlot
+            # For Plots.jl plots, save as PNG
+            savefig(plot.plot, path * ".png")
+        end
+        @info "Successfully saved plot" metric=metric path=path type=typeof(plot)
     catch e
-        @warn "Failed to save plot" metric=metric path=path exception=e
+        @warn "Failed to save plot" metric=metric path=path exception=e type=typeof(plot)
+    end
+end
+
+# Helper function to save multiple plots with logging
+function save_plots_with_logging(plots::Vector{<:VisualizationPlot}, base_path::String, plot_type::String)
+    @info "Saving $(plot_type) plots..."
+    for (i, plot) in enumerate(plots)
+        try
+            save_plot_safely(plot, 
+                joinpath(base_path, "$(plot_type)_$(i)"),
+                "$(plot_type)_$(i)"
+            )
+        catch e
+            @warn "Failed to save plot" plot_type=plot_type index=i exception=e
+        end
     end
 end
 
@@ -138,6 +192,7 @@ function plot_success_rate_comparison(results_df::DataFrame, output_path::String
         success_df = calculate_success_rate(results_df, [:agent_type, :force, :friction])
         
         # Create output file
+        plots = []
         open("$(output_path).txt", "w") do io
             println(io, "Success Rate Comparison")
             println(io, "=====================\n")
@@ -172,12 +227,15 @@ function plot_success_rate_comparison(results_df::DataFrame, output_path::String
                 
                 # Create heatmap
                 println(io, "\nSuccess Rate Heatmap for $(titlecase(agent_type)):")
-                hm = create_heatmap(success_matrix, "Success Rate (%)")
+                hm = create_ascii_heatmap(success_matrix, "Success Rate (%)")
                 println(io, hm)
+                push!(plots, hm)
             end
         end
+        return plots
     catch e
         @warn "Failed to create success rate comparison" exception=e
+        return []
     end
 end
 
@@ -188,6 +246,7 @@ Create performance metrics comparison plots.
 """
 function plot_performance_metrics(results_df::DataFrame, output_path::String)
     try
+        plots = []
         # Calculate metrics by agent type
         metrics_df = combine(groupby(results_df, :agent_type)) do group_df
             (
@@ -220,17 +279,20 @@ function plot_performance_metrics(results_df::DataFrame, output_path::String)
                 println(io, "\n$(titlecase(String(metric))):")
                 for agent_type in unique(results_df.agent_type)
                     data = filter(row -> row.agent_type == agent_type, results_df)
-                    p = create_lineplot(
+                    p = create_ascii_lineplot(
                         1:nrow(data),
                         data[!, metric],
                         "$(titlecase(agent_type)) - $(titlecase(String(metric)))"
                     )
                     println(io, p)
+                    push!(plots, p)
                 end
             end
         end
+        return plots
     catch e
         @warn "Failed to create performance metrics plots" exception=e
+        return []
     end
 end
 
@@ -268,7 +330,7 @@ function plot_energy_comparison(results_df::DataFrame, output_path::String)
             println(io, "\nEnergy Distribution by Agent Type:")
             for agent_type in unique(results_df.agent_type)
                 data = filter(row -> row.agent_type == agent_type, results_df)
-                p = create_histogram(
+                p = create_ascii_histogram(
                     collect(skipmissing(data.total_energy)),
                     "$(titlecase(agent_type)) Energy Distribution"
                 )
@@ -287,6 +349,7 @@ Create control strategy comparison plots.
 """
 function plot_control_comparison(results_df::DataFrame, output_path::String)
     try
+        plots = []
         open("$(output_path).txt", "w") do io
             println(io, "Control Strategy Analysis")
             println(io, "=======================\n")
@@ -304,15 +367,18 @@ function plot_control_comparison(results_df::DataFrame, output_path::String)
             println(io, "\nControl Effort Distribution by Agent Type:")
             for agent_type in unique(results_df.agent_type)
                 data = filter(row -> row.agent_type == agent_type, results_df)
-                p = create_histogram(
+                p = create_ascii_histogram(
                     collect(skipmissing(data.control_effort)),
                     "$(titlecase(agent_type)) Control Effort"
                 )
                 println(io, p)
+                push!(plots, p)
             end
         end
+        return plots
     catch e
         @warn "Failed to create control comparison plots" exception=e
+        return []
     end
 end
 
@@ -337,7 +403,7 @@ function plot_parameter_sweep_analysis(results_df::DataFrame, output_path::Strin
                     (success_rate = mean(group_df.success) * 100,)
                 end
                 println(io, "\n$(titlecase(agent_type)) - Force Effect:")
-                p = create_lineplot(
+                p = create_ascii_lineplot(
                     force_effect.force,
                     force_effect.success_rate,
                     "Success Rate vs Force"
@@ -349,7 +415,7 @@ function plot_parameter_sweep_analysis(results_df::DataFrame, output_path::Strin
                     (success_rate = mean(group_df.success) * 100,)
                 end
                 println(io, "\n$(titlecase(agent_type)) - Friction Effect:")
-                p = create_lineplot(
+                p = create_ascii_lineplot(
                     friction_effect.friction,
                     friction_effect.success_rate,
                     "Success Rate vs Friction"
@@ -401,16 +467,11 @@ end
     create_comparative_heatmaps(results_df::DataFrame, config::Dict)
 
 Create detailed heatmaps comparing Active Inference and Naive agents across parameter space.
+Returns (Vector{StandardPlot}, Union{StandardPlot, Nothing})
 """
 function create_comparative_heatmaps(results_df::DataFrame, config::Dict)
     try
-        # Create output directory with timestamp
-        timestamp = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
-        base_output_dir = joinpath(@__DIR__, "meta_analysis_results", timestamp)
-        output_dir = joinpath(base_output_dir, "heatmaps")
-        ensure_directory(output_dir)
-
-        # Calculate success rates and other metrics
+        # Calculate metrics for each parameter combination
         metrics_df = combine(groupby(results_df, [:agent_type, :force, :friction])) do group_df
             (
                 success_rate = mean(group_df.success) * 100,
@@ -425,7 +486,7 @@ function create_comparative_heatmaps(results_df::DataFrame, config::Dict)
         friction_range = sort(unique(results_df.friction))
 
         # Initialize plot collection
-        plot_collection = []
+        plot_collection = StandardPlot[]
 
         # Create heatmaps for each metric
         metrics = [:success_rate, :avg_completion_time, :avg_energy, :avg_control]
@@ -484,21 +545,17 @@ function create_comparative_heatmaps(results_df::DataFrame, config::Dict)
                 size=(1800,600),
                 margin=5Plots.mm)
             
-            push!(plot_collection, p_combined)
-
-            # Save individual plot
-            output_file = joinpath(output_dir, "$(String(metric))_comparison.png")
-            save_plot_safely(p_combined, output_file, String(metric))
+            push!(plot_collection, StandardPlot(p_combined))
         end
 
         # Create summary statistics plots
-        summary_plots = []
+        summary_plots = Plots.Plot[]
         for (i, (metric, name)) in enumerate(zip(metrics, metric_names))
             active_data = collect(skipmissing(filter(row -> row.agent_type == "active_inference", metrics_df)[!, metric]))
             naive_data = collect(skipmissing(filter(row -> row.agent_type == "naive", metrics_df)[!, metric]))
             
             if !isempty(active_data) && !isempty(naive_data)
-                # Create violin plots instead of boxplots
+                # Create violin plots
                 p = StatsPlots.violin(
                     ["Active Inference" for _ in 1:length(active_data)],
                     active_data,
@@ -517,30 +574,23 @@ function create_comparative_heatmaps(results_df::DataFrame, config::Dict)
                 )
                 
                 push!(summary_plots, p)
-            else
-                @warn "Insufficient data for summary plot" metric=metric
             end
         end
         
-        if !isempty(summary_plots)
-            # Combine summary plots
-            summary_stats = Plots.plot(summary_plots..., 
+        # Combine summary plots
+        summary_stats = if !isempty(summary_plots)
+            StandardPlot(Plots.plot(summary_plots..., 
                 layout=(2,2), 
                 size=(1200,1000),
-                margin=5Plots.mm)
-            
-            # Save summary statistics
-            output_file = joinpath(output_dir, "summary_statistics.png")
-            save_plot_safely(summary_stats, output_file, "summary")
+                margin=5Plots.mm))
         else
-            @warn "No summary plots were generated"
-            summary_stats = nothing
+            nothing
         end
 
         return plot_collection, summary_stats
     catch e
-        @error "Failed to create comparative heatmaps" exception=e
-        return nothing, nothing
+        @error "Failed to create comparative heatmaps" exception=(e, catch_backtrace())
+        return StandardPlot[], nothing
     end
 end
 

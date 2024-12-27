@@ -143,6 +143,7 @@ meta_analysis_results/
 - ✅ Core physics engine
 - ✅ Active Inference agent
 - ✅ Naive control agent
+- ✅ Naive control agent
 - ✅ Real-time visualization
 - ✅ Energy tracking
 - ✅ Performance metrics
