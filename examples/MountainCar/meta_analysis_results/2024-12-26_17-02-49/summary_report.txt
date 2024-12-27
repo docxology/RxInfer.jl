@@ -1,0 +1,50 @@
+=== Meta-Analysis Summary Report ===
+
+Analysis timestamp: 2024-12-26 17:04:16
+--------------------------------------------------
+
+Overall Statistics:
+--------------------
+Total simulations: 8
+Successful runs: 1
+Overall success rate: 12.50%
+
+Agent Comparison:
+--------------------
+
+Naive Agent:
+  Total runs: 4
+  Successful runs: 1
+  Success rate: 25.00%
+  Average energy usage: 46.396 (95% CI: -23.273 - 116.066)
+  Average control effort: 88.500 (95% CI: 65.960 - 111.040)
+
+Active_Inference Agent:
+  Total runs: 4
+  Successful runs: 0
+  Success rate: 0.00%
+  Average energy usage: 4.546 (95% CI: -12.510 - 21.601)
+  Average control effort: 83.183 (95% CI: 12.309 - 154.057)
+
+Parameter Analysis:
+--------------------
+
+Force Effect:
+  Range: 0.010 - 0.210
+  Naive Agent optimal force: 0.210 (Success rate: 50.00%)
+  Active_Inference Agent optimal force: 0.010 (Success rate: 0.00%)
+
+Friction Effect:
+  Range: 0.010 - 0.210
+  Naive Agent optimal friction: 0.010 (Success rate: 50.00%)
+  Active_Inference Agent optimal friction: 0.010 (Success rate: 0.00%)
+
+Agent Performance Comparison:
+--------------------
+Naive success rate: 25.00% (95% CI: -17.44% - 67.44%)
+Active_Inference success rate: 0.00% (95% CI: 0.00% - 0.00%)
+
+Difference (Active_Inference - Naive):
+  -25.00% (95% CI: -67.44% - 17.44%)
+  Relative improvement: 100.00%
+  Better agent: Naive

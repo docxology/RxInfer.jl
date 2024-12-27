@@ -4,18 +4,18 @@
 # Parameter ranges for force and friction
 # Force range: Controls the engine force limit
 min_force = 0.01    # Minimum engine force limit
-max_force = 0.20    # Maximum engine force limit
-force_steps = 5     # Number of force values to test
+max_force = 0.21    # Maximum engine force limit
+force_steps = 2     # Number of force values to test
 
 # Friction range: Controls the friction coefficient
 min_friction = 0.01  # Minimum friction coefficient
-max_friction = 0.2  # Maximum friction coefficient
-friction_steps = 5   # Number of friction values to test
+max_friction = 0.21  # Maximum friction coefficient
+friction_steps = 2   # Number of friction values to test
 
 [simulation]
 # Simulation parameters
-n_episodes = 2       # Number of episodes per parameter combination
-max_steps = 200      # Maximum steps per episode
+n_episodes = 1       # Number of episodes per parameter combination
+max_steps = 100      # Maximum steps per episode
 planning_horizon = 30 # Planning horizon for Active Inference agent
 
 [initial_state]

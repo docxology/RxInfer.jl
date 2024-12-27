@@ -3,12 +3,58 @@
 
 Mountain Car environment implementation with configurable physics parameters.
 """
+module MountainCar
 
 using RxInfer
 using RxInfer: getmodel, getreturnval, getvarref, getvariable
 using RxInfer.ReactiveMP: getrecent, messageout
 using HypergeometricFunctions
 using LinearAlgebra
+
+export MountainCarEnv, NaiveAgent, ActiveInferenceAgent,
+       reset!, step!, get_action, update_beliefs!
+
+# Define the mountain car model at the top level
+@model function mountain_car_model(env, T, dt, σ_x, σ_v, σ_a)
+    # Prior preferences for final state
+    μ_x = constvar(env.target_position)
+    μ_v = constvar(0.0)
+    
+    # Initial state
+    x_prev = randomvar(1)
+    v_prev = randomvar(1)
+    
+    # Dynamics over time
+    for t in 1:T
+        # Action selection (to be inferred)
+        a_t ~ NormalMeanVariance(0.0, σ_a^2)
+        
+        # State transition
+        engine_force = a_t * env.force
+        gravity_force = env.gravity * sin(3.0 * x_prev)
+        friction_force = -env.friction * v_prev
+        
+        # Velocity update
+        v_t ~ NormalMeanVariance(v_prev + engine_force + gravity_force + friction_force, σ_v^2)
+        v_t = clamp(v_t, -0.07, 0.07)
+        
+        # Position update
+        x_t ~ NormalMeanVariance(x_prev + v_t * dt, σ_x^2)
+        x_t = clamp(x_t, -1.2, 0.6)
+        
+        # Update previous state
+        x_prev = x_t
+        v_prev = v_t
+        
+        # Add observations
+        y_x_t ~ NormalMeanVariance(x_t, σ_x^2)
+        y_v_t ~ NormalMeanVariance(v_t, σ_v^2)
+    end
+    
+    # Target state preference
+    x_T ~ NormalMeanVariance(μ_x, σ_x^2)
+    v_T ~ NormalMeanVariance(μ_v, σ_v^2)
+end
 
 """
     MountainCarEnv
@@ -155,49 +201,8 @@ function create_generative_model(env::MountainCarEnv, T::Int)
     σ_v = 0.01  # Velocity noise
     σ_a = 0.1   # Action noise
     
-    # Create model
-    @model function mountain_car()
-        # Prior preferences for final state
-        μ_x = constvar(env.target_position)
-        μ_v = constvar(0.0)
-        
-        # Initial state
-        x_prev = randomvar(1)
-        v_prev = randomvar(1)
-        
-        # Dynamics over time
-        for t in 1:T
-            # Action selection (to be inferred)
-            a_t ~ NormalMeanVariance(0.0, σ_a^2)
-            
-            # State transition
-            engine_force = a_t * env.force
-            gravity_force = env.gravity * sin(3.0 * x_prev)
-            friction_force = -env.friction * v_prev
-            
-            # Velocity update
-            v_t ~ NormalMeanVariance(v_prev + engine_force + gravity_force + friction_force, σ_v^2)
-            v_t = clamp(v_t, -0.07, 0.07)
-            
-            # Position update
-            x_t ~ NormalMeanVariance(x_prev + v_t * dt, σ_x^2)
-            x_t = clamp(x_t, -1.2, 0.6)
-            
-            # Update previous state
-            x_prev = x_t
-            v_prev = v_t
-            
-            # Add observations
-            y_x_t ~ NormalMeanVariance(x_t, σ_x^2)
-            y_v_t ~ NormalMeanVariance(v_t, σ_v^2)
-        end
-        
-        # Target state preference
-        x_T ~ NormalMeanVariance(μ_x, σ_x^2)
-        v_T ~ NormalMeanVariance(μ_v, σ_v^2)
-    end
-    
-    return mountain_car
+    # Return the model with bound parameters
+    return () -> mountain_car_model(env, T, dt, σ_x, σ_v, σ_a)
 end
 
 """
@@ -321,3 +326,5 @@ function update_action_beliefs!(messages::Dict{Symbol,Any})
         action_beliefs[1] = action_msg
     end
 end
+
+end # module

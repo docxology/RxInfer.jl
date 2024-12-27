@@ -1,20 +1,20 @@
 """
     meta_analysis_simulation.jl
 
-Module for running batches of simulations with different physics parameters.
+Module for running batches of Mountain Car simulations.
 """
-
 module MetaAnalysisSimulation
 
 using RxInfer
 using DataFrames
 using Statistics
-using ProgressMeter: Progress, next!
+using Printf
+using Dates
 
 # Import MountainCar module
-using ..MountainCar
+using Main.MountainCar
 
-export SimulationBatch, run_single_simulation, run_simulation_batch
+export SimulationBatch, run_simulation_batch, run_single_simulation
 
 """
     SimulationBatch
@@ -22,188 +22,215 @@ export SimulationBatch, run_single_simulation, run_simulation_batch
 Structure containing parameters for a batch of simulations.
 """
 struct SimulationBatch
-    force_range::AbstractRange
-    friction_range::AbstractRange
+    force_range::AbstractRange{Float64}
+    friction_range::AbstractRange{Float64}
     n_episodes::Int
     max_steps::Int
     planning_horizon::Int
-    initial_state::Dict{String, Float64}
-    target_state::Dict{String, Float64}
+    initial_state::Dict{String,Float64}
+    target_state::Dict{String,Float64}
 end
 
-# Constructor with keyword arguments
+"""
+    SimulationBatch(; kwargs...)
+
+Constructor for SimulationBatch with keyword arguments.
+Handles type conversions for the state dictionaries.
+"""
 function SimulationBatch(;
     force_range::AbstractRange,
     friction_range::AbstractRange,
-    n_episodes::Int,
-    max_steps::Int,
-    planning_horizon::Int,
-    initial_state::Dict{String, Any},
-    target_state::Dict{String, Any}
+    n_episodes::Integer,
+    max_steps::Integer,
+    planning_horizon::Integer,
+    initial_state::Dict{String,Any},
+    target_state::Dict{String,Any}
 )
+    # Convert ranges to Float64 if needed
+    force_range_f64 = convert(AbstractRange{Float64}, force_range)
+    friction_range_f64 = convert(AbstractRange{Float64}, friction_range)
+    
     # Convert state dictionaries to Float64
-    initial_state_float = Dict{String, Float64}(k => Float64(v) for (k, v) in initial_state)
-    target_state_float = Dict{String, Float64}(k => Float64(v) for (k, v) in target_state)
+    initial_state_f64 = Dict{String,Float64}(k => Float64(v) for (k, v) in initial_state)
+    target_state_f64 = Dict{String,Float64}(k => Float64(v) for (k, v) in target_state)
     
     return SimulationBatch(
-        force_range,
-        friction_range,
-        n_episodes,
-        max_steps,
-        planning_horizon,
-        initial_state_float,
-        target_state_float
+        force_range_f64,
+        friction_range_f64,
+        Int(n_episodes),
+        Int(max_steps),
+        Int(planning_horizon),
+        initial_state_f64,
+        target_state_f64
     )
 end
 
 """
-    run_single_simulation(force::Float64, friction::Float64, agent_type::String, batch::SimulationBatch)
+    run_single_simulation(force, friction, agent_type, batch)
 
-Run a single simulation with given parameters and return metrics.
+Run a single simulation with given parameters.
 """
 function run_single_simulation(force::Float64, friction::Float64, agent_type::String, batch::SimulationBatch)
-    # Create physics environment with specified parameters
+    # Create physics environment
     Fa, Ff, Fg, height = MountainCar.create_physics(
         engine_force_limit=force,
         friction_coefficient=friction
     )
-    
+
+    # Initial and target states
+    initial_position = batch.initial_state["position"]
+    initial_velocity = batch.initial_state["velocity"]
+    x_target = [batch.target_state["position"], batch.target_state["velocity"]]
+
     # Create world
     execute, observe = MountainCar.create_world(
         Fg=Fg, Ff=Ff, Fa=Fa,
-        initial_position=batch.initial_state["position"],
-        initial_velocity=batch.initial_state["velocity"]
+        initial_position=initial_position,
+        initial_velocity=initial_velocity
     )
-    
-    # Create agent
-    if agent_type == "naive"
-        # Naive agent always pushes right
-        compute = (upsilon_t::Float64, y_hat_t::Vector{Float64}) -> nothing
-        act = () -> 1.0
-        slide = () -> nothing
-        future = () -> zeros(batch.planning_horizon)
-        agent = (compute, act, slide, future)
-    else
-        # Active inference agent
-        agent = MountainCar.create_agent(
-            T=batch.planning_horizon,
-            Fg=Fg, Fa=Fa, Ff=Ff,
-            engine_force_limit=force,
-            x_target=[batch.target_state["position"], batch.target_state["velocity"]],
-            initial_position=batch.initial_state["position"],
-            initial_velocity=batch.initial_state["velocity"]
-        )
-    end
-    
-    # Run simulation
+
+    # Initialize metrics
     positions = Float64[]
     velocities = Float64[]
     actions = Float64[]
     energies = Float64[]
-    
-    # Initial observation
-    state = observe()
-    push!(positions, state[1])
-    push!(velocities, state[2])
-    
-    compute, act, slide, future = agent
-    success = false
-    target_time = batch.max_steps
-    
-    for t in 1:batch.max_steps
-        # Get action and execute
-        action = act()
-        push!(actions, action)
-        execute(action)
-        
-        # Observe and update
-        state = observe()
-        push!(positions, state[1])
-        push!(velocities, state[2])
-        
-        # Calculate energy
-        ke, pe, te = MountainCar.calculate_energy([state[1]], [state[2]], height)
-        push!(energies, te[1])
-        
-        # Check if target reached
-        if abs(state[1] - batch.target_state["position"]) < 0.01 && 
-           abs(state[2] - batch.target_state["velocity"]) < 0.05
-            success = true
-            target_time = t
-            break
+    target_time = batch.max_steps + 1
+
+    # Run simulation based on agent type
+    if agent_type == "naive"
+        # Naive agent (always push right)
+        for t in 1:batch.max_steps
+            state = observe()
+            push!(positions, state[1])
+            push!(velocities, state[2])
+            
+            # Always push right with maximum force
+            action = 1.0
+            push!(actions, action)
+            execute(action)
+            
+            # Calculate energy
+            ke = 0.5 * state[2]^2
+            pe = 9.81 * height(state[1])
+            push!(energies, ke + pe)
+            
+            # Check if target reached
+            if abs(state[1] - x_target[1]) < 0.01 && abs(state[2] - x_target[2]) < 0.05
+                target_time = t
+                break
+            end
         end
-        
-        # Update agent's beliefs
-        compute(action, state)
-        slide()
+    else
+        # Active Inference agent
+        compute, act, slide, future = MountainCar.create_agent(
+            T=batch.planning_horizon,
+            Fa=Fa, Fg=Fg, Ff=Ff,
+            engine_force_limit=force,
+            x_target=x_target,
+            initial_position=initial_position,
+            initial_velocity=initial_velocity
+        )
+
+        # Initial observation and computation
+        current_state = observe()
+        push!(positions, current_state[1])
+        push!(velocities, current_state[2])
+        compute(0.0, current_state)
+
+        for t in 1:batch.max_steps
+            # Get action and execute
+            action = act()
+            push!(actions, action)
+            execute(action)
+
+            # Observe and update
+            current_state = observe()
+            push!(positions, current_state[1])
+            push!(velocities, current_state[2])
+            
+            # Calculate energy
+            ke = 0.5 * current_state[2]^2
+            pe = 9.81 * height(current_state[1])
+            push!(energies, ke + pe)
+
+            # Check if target reached
+            if abs(current_state[1] - x_target[1]) < 0.01 && abs(current_state[2] - x_target[2]) < 0.05
+                target_time = t
+                break
+            end
+
+            # Update agent's beliefs
+            compute(action, current_state)
+            slide()
+        end
     end
-    
+
     # Calculate metrics
-    metrics = (
-        success=success,
-        target_time=target_time,
-        total_energy=mean(energies),
-        efficiency=success ? target_time / mean(energies) : 0.0,
-        stability=std(velocities),
-        oscillations=count(diff(sign.(velocities)) .!= 0),
-        control_effort=sum(abs.(actions)),
-        max_position=maximum(positions),
-        avg_velocity=mean(abs.(velocities))
-    )
-    
-    # Return results with physics parameters
+    success = target_time <= batch.max_steps
+    completion_time = success ? target_time : batch.max_steps
+    max_position = maximum(positions)
+    avg_velocity = mean(velocities)
+    total_energy = sum(energies)
+    avg_energy = mean(energies)
+    control_effort = sum(abs.(actions))
+
+    # Return metrics as a named tuple
     return (
         force=force,
         friction=friction,
         agent_type=agent_type,
-        success=metrics.success,
-        target_time=metrics.target_time,
-        total_energy=metrics.total_energy,
-        efficiency=metrics.efficiency,
-        stability=metrics.stability,
-        oscillations=metrics.oscillations,
-        control_effort=metrics.control_effort,
-        max_position=metrics.max_position,
-        avg_velocity=metrics.avg_velocity
+        success=success,
+        completion_time=completion_time,
+        max_position=max_position,
+        avg_velocity=avg_velocity,
+        total_energy=total_energy,
+        avg_energy=avg_energy,
+        control_effort=control_effort,
+        final_position=positions[end],
+        final_velocity=velocities[end],
+        efficiency=success ? 1.0 / (completion_time * total_energy) : 0.0
     )
 end
 
 """
-    run_simulation_batch(batch::SimulationBatch)
+    run_simulation_batch(batch)
 
-Run a batch of simulations with different parameter combinations and return results as DataFrame.
+Run a batch of simulations with different parameters.
 """
 function run_simulation_batch(batch::SimulationBatch)
-    # Calculate total number of simulations
-    n_force = length(batch.force_range)
-    n_friction = length(batch.friction_range)
-    n_agents = 2  # naive and active
-    total_sims = n_force * n_friction * n_agents * batch.n_episodes
-    
-    # Initialize progress meter
-    prog = Progress(total_sims, desc="Running simulations...")
-    
-    # Initialize results array
     results = []
-    
-    # Run simulations for each parameter combination
+    total_sims = length(batch.force_range) * length(batch.friction_range) * 2 * batch.n_episodes
+    completed_sims = 0
+    successful_sims = 0
+
+    # Progress tracking
+    print("Running simulations... 0%")
+    flush(stdout)
+
     for force in batch.force_range
         for friction in batch.friction_range
-            for agent_type in ["naive", "active"]
-                for _ in 1:batch.n_episodes
-                    # Run single simulation
-                    metrics = run_single_simulation(force, friction, agent_type, batch)
-                    push!(results, metrics)
-                    
+            for agent_type in ["naive", "active_inference"]
+                for episode in 1:batch.n_episodes
+                    # Run simulation
+                    result = run_single_simulation(force, friction, agent_type, batch)
+                    push!(results, result)
+
+                    # Update counters
+                    completed_sims += 1
+                    successful_sims += result.success ? 1 : 0
+
                     # Update progress
-                    next!(prog)
+                    progress = round(Int, 100 * completed_sims / total_sims)
+                    print("\rRunning simulations... $progress%")
+                    flush(stdout)
                 end
             end
         end
     end
-    
-    # Convert results to DataFrame
-    return DataFrame(results)
+
+    println("\nCompleted $completed_sims simulations with $(successful_sims) successes ($(round(100 * successful_sims / completed_sims, digits=2))% success rate)")
+
+    return results
 end
 
-end # module MetaAnalysisSimulation 
+end # module 
